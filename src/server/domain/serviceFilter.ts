@@ -43,15 +43,15 @@ function buildReasons(
   cost: FilteredResource["cost"],
 ) {
   const reasons = [
-    `地区与输入一致：${resource.municipality}`,
-    "学龄在登记的对象范围内",
-    "至少有一个可利用时段与输入重合",
+    `地域が一致：${resource.municipality}`,
+    "対象学年に含まれています",
+    "利用できる時間帯が入力条件と重なっています",
   ];
 
-  if (conditions.can_pickup === "yes") reasons.push("登记信息显示可提供送迎");
-  if (conditions.can_pickup === "no") reasons.push("登记信息没有要求送迎");
+  if (conditions.can_pickup === "yes") reasons.push("送迎対応の登録があります");
+  if (conditions.can_pickup === "no") reasons.push("送迎を必須条件にしていません");
   if (resource.monthly_fee !== null && cost.estimated_self_pay <= conditions.monthly_budget) {
-    reasons.push("按开发演示公式计算后，预计自付在月预算内");
+    reasons.push("仮計算式での見込み自己負担が月の予算内です");
   }
 
   return reasons;
@@ -60,7 +60,7 @@ function buildReasons(
 function buildVerificationPoints(resource: SupportResource) {
   return [
     ...resource.notes,
-    "请在首次联系时确认最新费用、名额和具体利用条件。",
+    "初回連絡時に最新の料金、空き状況、利用条件を確認してください。",
   ];
 }
 

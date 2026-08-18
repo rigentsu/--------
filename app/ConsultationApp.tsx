@@ -22,27 +22,27 @@ const initialConditions: ConsultationConditions = {
 };
 
 const gradeOptions: Array<{ value: Grade; label: string }> = [
-  { value: "elementary_1", label: "小学 1 年" },
-  { value: "elementary_2", label: "小学 2 年" },
-  { value: "elementary_3", label: "小学 3 年" },
-  { value: "elementary_4", label: "小学 4 年" },
-  { value: "elementary_5", label: "小学 5 年" },
-  { value: "elementary_6", label: "小学 6 年" },
-  { value: "junior_high_1", label: "中学 1 年" },
-  { value: "junior_high_2", label: "中学 2 年" },
-  { value: "junior_high_3", label: "中学 3 年" },
+  { value: "elementary_1", label: "小学1年生" },
+  { value: "elementary_2", label: "小学2年生" },
+  { value: "elementary_3", label: "小学3年生" },
+  { value: "elementary_4", label: "小学4年生" },
+  { value: "elementary_5", label: "小学5年生" },
+  { value: "elementary_6", label: "小学6年生" },
+  { value: "junior_high_1", label: "中学1年生" },
+  { value: "junior_high_2", label: "中学2年生" },
+  { value: "junior_high_3", label: "中学3年生" },
 ];
 
 const timeOptions: Array<{ value: TimeSlot; label: string }> = [
-  { value: "weekday_afternoon", label: "平日下午" },
-  { value: "weekday_evening", label: "平日晚间" },
-  { value: "saturday_morning", label: "周末上午" },
+  { value: "weekday_afternoon", label: "平日午後" },
+  { value: "weekday_evening", label: "平日夜間" },
+  { value: "saturday_morning", label: "土曜午前" },
 ];
 
 const pickupOptions: Array<{ value: PickupPreference; label: string }> = [
-  { value: "yes", label: "可以送迎" },
-  { value: "no", label: "不能送迎" },
-  { value: "unknown", label: "还不确定" },
+  { value: "yes", label: "送迎できる" },
+  { value: "no", label: "送迎できない" },
+  { value: "unknown", label: "まだわからない" },
 ];
 
 function formatYen(value: number) {
@@ -58,9 +58,7 @@ function timeLabel(time: TimeSlot) {
 }
 
 export default function ConsultationApp() {
-  const [naturalText, setNaturalText] = useState(
-    "我住在新宿区，孩子是初二，平日下午可以利用，不能送迎，每月最多能负担 3 万元。",
-  );
+  const [naturalText, setNaturalText] = useState("");
   const [conditions, setConditions] =
     useState<ConsultationConditions>(initialConditions);
   const [results, setResults] = useState<FilterResult | null>(null);
@@ -71,21 +69,21 @@ export default function ConsultationApp() {
     const parsed = parseNaturalLanguage(naturalText);
     if (Object.keys(parsed).length === 0) {
       setParseNotice("");
-      setError("暂时没有识别出条件，请直接使用下面的固定表单填写。");
+      setError("条件を読み取れませんでした。下の固定フォームに入力してください。");
       return;
     }
 
     setConditions((current) => ({ ...current, ...parsed }));
     setResults(null);
     setError("");
-    setParseNotice("已把可识别的信息带入下方表单，请确认后开始筛选。");
+    setParseNotice("読み取れた情報を下のフォームに反映しました。内容を確認してから検索してください。");
   }
 
   function handleSearch() {
     const validated = ConsultationConditionsSchema.safeParse(conditions);
     if (!validated.success) {
       setResults(null);
-      setError("请补齐地区、学龄、时段和月预算后再开始筛选。");
+      setError("地域、学年、時間帯、月の予算を入力してから検索してください。");
       return;
     }
 
@@ -107,33 +105,33 @@ export default function ConsultationApp() {
   return (
     <div className="site-shell">
       <header className="site-header">
-        <a className="brand" href="#top" aria-label="よりそいナビ首页">
+        <a className="brand" href="#top" aria-label="よりそいナビのトップ">
           <span className="brand-mark" aria-hidden="true">
             +
           </span>
           <span className="brand-copy">
             <span className="brand-name">よりそいナビ</span>
-            <span className="brand-caption">SUPPORT CHOICE TOOL</span>
+            <span className="brand-caption">支援選択サポート</span>
           </span>
         </a>
-        <span className="header-note">不保存完整咨询内容</span>
+        <span className="header-note">相談内容は保存されません</span>
       </header>
 
       <main id="top">
         <section className="hero">
-          <p className="eyebrow">不登校支援 · prototype v1</p>
+          <p className="eyebrow">不登校支援 · 試作 v1</p>
           <h1>
-            先把现实条件理清，
+            まずは現実的な条件を整理して、
             <br />
-            再一起看看<em>有哪些选择。</em>
+            いっしょに<em>選択肢を見てみる。</em>
           </h1>
           <p className="hero-lead">
-            用普通语言说说现在的情况，再从限定的演示数据中并列比较可能的支援选项。这里不做诊断，也不替家长作出唯一决定。
+            まずは5つの基本条件だけで検索できます。必要に応じて、下の補足欄に自由に入力した内容を条件へ反映できます。診断や唯一の答えを出すものではありません。
           </p>
-          <span className="demo-badge">开发演示 · 当前仅覆盖新宿区演示数据</span>
+          <span className="demo-badge">開発デモ · 現在は新宿区のデモデータのみ</span>
         </section>
 
-        <section className="workspace" aria-label="支援选项筛选工具">
+        <section className="workspace" aria-label="支援選択肢の検索ツール">
           <form
             className="panel form-panel"
             onSubmit={(event) => {
@@ -143,43 +141,17 @@ export default function ConsultationApp() {
           >
             <div className="panel-heading">
               <div>
-                <h2>说说你的情况</h2>
-                <p>先自由输入，也可以直接填写条件。</p>
+                <h2>条件を設定する</h2>
+                <p>入力した5つの条件だけを使って、利用できそうな支援を検索します。</p>
               </div>
               <span className="step-number">01</span>
             </div>
 
             <div className="field-group">
-              <label className="field-label" htmlFor="natural-text">
-                用普通语言描述
-              </label>
-              <textarea
-                id="natural-text"
-                className="textarea"
-                value={naturalText}
-                onChange={(event) => setNaturalText(event.target.value)}
-                placeholder="例如：我住在新宿区，孩子初二，平日下午可以利用……"
-              />
-              <div className="parse-row">
-                <span className="parse-hint">
-                  第一版使用本地演示解析；AI 不可用时仍可继续使用固定表单。
-                </span>
-                <button
-                  className="ghost-button"
-                  type="button"
-                  onClick={handleParse}
-                >
-                  整理到表单
-                </button>
-              </div>
-              {parseNotice ? <p className="field-hint">{parseNotice}</p> : null}
-            </div>
-
-            <div className="field-group">
-              <span className="field-label">确认五项条件</span>
+              <span className="field-label">5つの条件を確認</span>
               <div className="condition-grid">
                 <label className="field-group" htmlFor="municipality">
-                  <span className="field-label">居住地区</span>
+                  <span className="field-label">居住地域</span>
                   <select
                     id="municipality"
                     className="select"
@@ -192,12 +164,12 @@ export default function ConsultationApp() {
                       setResults(null);
                     }}
                   >
-                    <option value="新宿区">新宿区（演示范围）</option>
+                    <option value="新宿区">新宿区（デモ対象）</option>
                   </select>
                 </label>
 
                 <label className="field-group" htmlFor="grade">
-                  <span className="field-label">孩子的学年</span>
+                  <span className="field-label">子どもの学年</span>
                   <select
                     id="grade"
                     className="select"
@@ -221,7 +193,7 @@ export default function ConsultationApp() {
             </div>
 
             <div className="field-group">
-              <span className="field-label">可以利用的日期或时间</span>
+              <span className="field-label">利用できる曜日・時間帯</span>
               <div className="choice-row">
                 {timeOptions.map((option) => (
                   <button
@@ -239,7 +211,7 @@ export default function ConsultationApp() {
             </div>
 
             <div className="field-group">
-              <span className="field-label">是否能够送迎</span>
+              <span className="field-label">送迎の可否</span>
               <div className="choice-row">
                 {pickupOptions.map((option) => (
                   <button
@@ -264,7 +236,7 @@ export default function ConsultationApp() {
 
             <div className="condition-grid">
               <label className="field-group" htmlFor="monthly-budget">
-                <span className="field-label">每月可承担金额</span>
+                <span className="field-label">月に負担できる金額</span>
                 <div className="currency-input">
                   <input
                     id="monthly-budget"
@@ -286,7 +258,7 @@ export default function ConsultationApp() {
               </label>
 
               <label className="field-group" htmlFor="annual-income">
-                <span className="field-label">年收入（可选）</span>
+                <span className="field-label">年収（任意）</span>
                 <div className="currency-input">
                   <input
                     id="annual-income"
@@ -309,24 +281,59 @@ export default function ConsultationApp() {
             </div>
 
             <button className="primary-button" type="submit">
-              查找可能的支援选项 <span aria-hidden="true">→</span>
+              利用できそうな支援を探す <span aria-hidden="true">→</span>
             </button>
 
             <div className="form-disclaimer">
-              输入内容只在当前页面内用于演示筛选，不要求姓名、学校名称或诊断信息。
+              入力内容はこのページ内のデモ検索にのみ使用し、氏名、学校名、診断情報は求めません。
             </div>
             {error ? <p className="error-message">{error}</p> : null}
+
+            <div className="supplement-section">
+              <div className="supplement-heading">
+                <div>
+                  <span className="field-label">補足を入力する（任意）</span>
+                  <p className="field-hint">
+                    ほかに伝えておきたいことがある場合だけ使えます。ここに入力した内容は、ボタンを押すまで検索条件に入りません。
+                  </p>
+                </div>
+                <span className="chat-mark" aria-hidden="true">＋</span>
+              </div>
+              <label className="sr-only" htmlFor="natural-text">
+                補足内容
+              </label>
+              <textarea
+                id="natural-text"
+                className="textarea"
+                value={naturalText}
+                onChange={(event) => setNaturalText(event.target.value)}
+                placeholder="例：新宿区に住んでいて、中学2年生の子どもがいます。平日午後に利用できて…"
+              />
+              <div className="parse-row">
+                <span className="parse-hint">
+                  基本条件だけで検索できます。補足を反映した後は、上の検索ボタンをもう一度押してください。
+                </span>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={handleParse}
+                >
+                  補足を条件に反映
+                </button>
+              </div>
+              {parseNotice ? <p className="field-hint">{parseNotice}</p> : null}
+            </div>
           </form>
 
           <section className="panel results-panel" aria-live="polite">
             <div className="results-heading">
               <div>
-                <h2>可能的选择</h2>
-                <p>先看并列选项，再决定要向谁确认。没有“AI 第一名”。</p>
+                <h2>選択肢を見てみる</h2>
+                <p>複数の候補を見比べて、次に確認する先を考えましょう。「AIの第1位」はありません。</p>
               </div>
-              <div className="result-count" aria-label="匹配数量">
+              <div className="result-count" aria-label="候補の数">
                 <strong>{results?.matches.length ?? "—"}</strong>
-                <span>个候选</span>
+                <span>候補</span>
               </div>
             </div>
 
@@ -336,9 +343,9 @@ export default function ConsultationApp() {
                   <div className="empty-illustration" aria-hidden="true">
                     ◌
                   </div>
-                  <h3>从你的条件开始</h3>
+                  <h3>条件から始めましょう</h3>
                   <p>
-                    右侧会显示多个可能的选项，并分别说明费用、保留理由和需要再次确认的内容。
+                    右側に複数の候補を表示し、費用、残った理由、もう一度確認したい内容をそれぞれ説明します。
                   </p>
                 </div>
               </div>
@@ -348,19 +355,19 @@ export default function ConsultationApp() {
                   <div className="empty-illustration" aria-hidden="true">
                     …
                   </div>
-                  <h3>暂时没有同时符合的条目</h3>
+                  <h3>すべての条件に合う候補はありませんでした</h3>
                   <p>
-                    可以尝试放宽可利用时段、送迎条件或月预算。当前数据共排除了 {results.excluded_count} 个演示条目。
+                    利用時間帯、送迎条件、月の予算を少し広げてみてください。現在 {results.excluded_count} 件のデモ項目を除外しました。
                   </p>
                 </div>
               </div>
             ) : (
               <>
                 <div className="results-summary">
-                  根据目前输入：<strong>{conditions.municipality}</strong> ·{" "}
+                  現在の入力：<strong>{conditions.municipality}</strong> ·{" "}
                   <strong>{gradeLabel(conditions.grade)}</strong> ·{" "}
                   <strong>{conditions.preferred_times.map(timeLabel).join(" / ")}</strong>
-                  。共保留 <strong>{results.matches.length} 个</strong> 可能选项。
+                  。<strong>{results.matches.length}件</strong>の候補を残しました。
                 </div>
 
                 <div className="candidate-list">
@@ -374,20 +381,20 @@ export default function ConsultationApp() {
                               : "category-badge private"
                           }
                         >
-                          {resource.category === "public" ? "公营选项" : "民营选项"}
+                          {resource.category === "public" ? "公営の選択肢" : "民間の選択肢"}
                         </span>
-                        <span className="status-badge">演示数据 · 待核实</span>
+                        <span className="status-badge">デモデータ · 要確認</span>
                       </div>
                       <div className="candidate-title-row">
                         <h3>{resource.name}</h3>
                         <span className="candidate-type">
                           {resource.can_pickup === true
-                            ? "可送迎登记"
-                            : "送迎未确认"}
+                            ? "送迎ありの登録"
+                            : "送迎は未確認"}
                         </span>
                       </div>
                       <p className="candidate-note">
-                        这是基于目前输入条件保留下来的可能选项，不代表一定可以利用。
+                        現在の入力条件で残った候補です。必ず利用できることを示すものではありません。
                       </p>
 
                       <ul className="reason-list" aria-label="保留理由">
@@ -398,27 +405,27 @@ export default function ConsultationApp() {
 
                       <div className="cost-box">
                         <div className="cost-row">
-                          <span>登记月费</span>
+                          <span>登録月額</span>
                           <strong>{formatYen(resource.cost.monthly_fee)}</strong>
                         </div>
                         <div className="cost-row">
-                          <span>开发演示月度补助</span>
+                          <span>開発デモ月額補助</span>
                           <strong>
                             −{formatYen(resource.cost.monthly_subsidy)}
                           </strong>
                         </div>
                         <div className="cost-row total">
-                          <span>预计月度自付</span>
+                          <span>見込み月額自己負担</span>
                           <strong>
                             {formatYen(resource.cost.estimated_self_pay)}
                           </strong>
                         </div>
                         <p className="prototype-tag">
-                          开发演示用假公式（非真实制度）：年收入 × 0.2 ÷ 12
+                          開発デモ用の仮計算式（実際の制度ではありません）：年収 × 0.2 ÷ 12
                         </p>
                       </div>
 
-                      <ul className="verify-list" aria-label="需要确认的内容">
+                      <ul className="verify-list" aria-label="確認が必要な内容">
                         {resource.verification_points.map((point) => (
                           <li key={point}>{point}</li>
                         ))}
@@ -426,8 +433,8 @@ export default function ConsultationApp() {
 
                       <div className="source-row">
                         <div className="source-meta">
-                          <span>来源：未来地図 · {resource.verified_at}</span>
-                          <span>当前仅展示白名单内的本地演示条目</span>
+                          <span>出典：未来地図 · {resource.verified_at}</span>
+                          <span>現在はホワイトリスト内のローカルデモ項目のみ表示</span>
                         </div>
                         <a
                           className="source-link"
@@ -435,7 +442,7 @@ export default function ConsultationApp() {
                           target="_blank"
                           rel="noreferrer"
                         >
-                          查看来源入口 ↗
+                          出典を見る ↗
                         </a>
                       </div>
                     </article>
@@ -445,14 +452,14 @@ export default function ConsultationApp() {
             )}
 
             <p className="disclaimer">
-              这是功能开发演示，不进行医疗、心理或教育诊断，也不预测复学。费用与资格请以机构和自治体最新说明为准。
+              これは機能開発デモです。医療・心理・教育上の診断や復学予測は行いません。費用と資格は各機関・自治体の最新情報を確認してください。
             </p>
           </section>
         </section>
       </main>
 
       <footer className="site-footer">
-        よりそいナビ prototype v1 · 支援选择工具 · 当前不保存长期个人档案
+        よりそいナビ 試作 v1 · 支援選択ツール · 長期的な個人記録は保存しません
       </footer>
     </div>
   );

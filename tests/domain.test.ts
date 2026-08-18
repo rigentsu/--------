@@ -5,7 +5,7 @@ import { parseNaturalLanguage } from "../src/server/domain/naturalLanguage";
 import { filterSupportResources } from "../src/server/domain/serviceFilter";
 import { ConsultationConditionsSchema } from "../src/server/domain/schemas";
 
-test("prototype subsidy follows the documented formula", () => {
+test("開発デモの補助計算は要求書の仮計算式に従う", () => {
   assert.deepEqual(calculatePrototypeSubsidy(5_000_000), {
     annual_subsidy: 1_000_000,
     monthly_subsidy: 83_333,
@@ -16,9 +16,9 @@ test("prototype subsidy follows the documented formula", () => {
   assert.throws(() => calculatePrototypeSubsidy(Number.NaN));
 });
 
-test("natural language parser extracts the five core demo conditions", () => {
+test("自然な日本語から5つの基本条件を抽出する", () => {
   const parsed = parseNaturalLanguage(
-    "我住在新宿区，孩子是初二，平日下午可以利用，不能送迎，每月最多能负担 3 万元。",
+    "新宿区に住んでいて、子どもは中学2年生です。平日午後に利用でき、送迎はできません。月3万円まで負担できます。",
   );
 
   assert.deepEqual(parsed, {
@@ -30,7 +30,7 @@ test("natural language parser extracts the five core demo conditions", () => {
   });
 });
 
-test("filtering keeps multiple white-listed options", () => {
+test("ホワイトリスト内の公営・民間の候補を複数残す", () => {
   const conditions = ConsultationConditionsSchema.parse({
     municipality: "新宿区",
     grade: "junior_high_2",

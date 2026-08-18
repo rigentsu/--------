@@ -29,9 +29,9 @@ test("server-renders the first consultation experience", async () => {
 
   const html = await response.text();
   assert.match(html, /よりそいナビ/);
-  assert.match(html, /说说你的情况/);
-  assert.match(html, /查找可能的支援选项/);
-  assert.match(html, /开发演示/);
-  assert.match(html, /不保存完整咨询内容/);
+  assert.match(html, /条件を設定する/);
+  assert.match(html, /利用できそうな支援を探す/);
+  assert.match(html, /開発デモ/);
+  assert.match(html, /相談内容は保存されません/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton/);
 });
