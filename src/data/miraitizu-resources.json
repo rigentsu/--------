@@ -1,0 +1,84 @@
+[
+  {
+    "id": "demo-shinjuku-public-space",
+    "name": "新宿区 公营学习支援空间（演示条目）",
+    "source_id": "miraitizu",
+    "category": "public",
+    "municipality": "新宿区",
+    "eligible_grades": [
+      "elementary_1",
+      "elementary_2",
+      "elementary_3",
+      "elementary_4",
+      "elementary_5",
+      "elementary_6",
+      "junior_high_1",
+      "junior_high_2",
+      "junior_high_3"
+    ],
+    "opening_times": ["weekday_afternoon", "saturday_morning"],
+    "can_pickup": false,
+    "monthly_fee": 0,
+    "source_url": "https://miraitizu.com/parent-meeting/",
+    "verified_at": "待人工确认",
+    "notes": [
+      "这是用于验证筛选流程的开发演示条目。",
+      "开放日期、受理方式和出席扱い需要直接向窗口确认。"
+    ],
+    "data_status": "demo_unverified"
+  },
+  {
+    "id": "demo-shinjuku-weekday-school",
+    "name": "新宿区 民营 Free School（平日下午演示条目）",
+    "source_id": "miraitizu",
+    "category": "private",
+    "municipality": "新宿区",
+    "eligible_grades": ["elementary_5", "elementary_6", "junior_high_1", "junior_high_2", "junior_high_3"],
+    "opening_times": ["weekday_afternoon"],
+    "can_pickup": true,
+    "monthly_fee": 26000,
+    "source_url": "https://miraitizu.com/freeschool/",
+    "verified_at": "待人工确认",
+    "notes": [
+      "这是用于验证筛选流程的开发演示条目。",
+      "费用、名额、送迎范围及是否可计入出席扱い需要直接向机构确认。"
+    ],
+    "data_status": "demo_unverified"
+  },
+  {
+    "id": "demo-shinjuku-weekend-school",
+    "name": "新宿区 周末支援教室（演示条目）",
+    "source_id": "miraitizu",
+    "category": "private",
+    "municipality": "新宿区",
+    "eligible_grades": ["elementary_3", "elementary_4", "elementary_5", "elementary_6", "junior_high_1", "junior_high_2", "junior_high_3"],
+    "opening_times": ["saturday_morning"],
+    "can_pickup": false,
+    "monthly_fee": 18000,
+    "source_url": "https://miraitizu.com/freeschool/",
+    "verified_at": "待人工确认",
+    "notes": [
+      "这是用于验证筛选流程的开发演示条目。",
+      "周末安排、费用及接待对象需要直接向机构确认。"
+    ],
+    "data_status": "demo_unverified"
+  },
+  {
+    "id": "demo-shinjuku-evening-online",
+    "name": "新宿区 晚间在线学习支持（演示条目）",
+    "source_id": "miraitizu",
+    "category": "private",
+    "municipality": "新宿区",
+    "eligible_grades": ["junior_high_1", "junior_high_2", "junior_high_3"],
+    "opening_times": ["weekday_evening"],
+    "can_pickup": false,
+    "monthly_fee": 12000,
+    "source_url": "https://miraitizu.com/freeschool/",
+    "verified_at": "待人工确认",
+    "notes": [
+      "这是用于验证筛选流程的开发演示条目。",
+      "线上形式、设备要求和费用内容需要直接向机构确认。"
+    ],
+    "data_status": "demo_unverified"
+  }
+]
