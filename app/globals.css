@@ -339,6 +339,13 @@ button {
   transform: translateY(-1px);
 }
 
+.ghost-button:disabled,
+.primary-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+  transform: none;
+}
+
 .primary-button:hover {
   background: #28594f;
   box-shadow: 0 13px 24px rgba(53, 107, 96, 0.24);
@@ -372,7 +379,42 @@ button {
   font-weight: 800;
 }
 
+.need-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.need-choice-button {
+  display: grid;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: white;
+  padding: 12px;
+  color: var(--ink);
+  text-align: left;
+}
+
+.need-choice-button strong {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.need-choice-button span {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.need-choice-button[data-active="true"] {
+  border-color: var(--teal);
+  background: var(--blue-soft);
+  box-shadow: inset 0 0 0 1px var(--teal);
+}
+
 .choice-button:focus-visible,
+.need-choice-button:focus-visible,
 .ghost-button:focus-visible,
 .primary-button:focus-visible,
 .source-link:focus-visible {
@@ -578,6 +620,18 @@ button {
   gap: 14px;
 }
 
+.review-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.review-summary {
+  margin-bottom: 0;
+  background: var(--coral-soft);
+  color: #8d5a48;
+}
+
 .candidate-card {
   padding: 19px;
   border: 1px solid var(--line);
@@ -623,6 +677,18 @@ button {
   background: #f5f3ef;
   color: var(--muted);
   font-weight: 600;
+}
+
+.distance-badge {
+  margin-left: auto;
+  padding: 5px 9px;
+  border: 1px solid #c8e2dc;
+  border-radius: 999px;
+  background: #edf8f5;
+  color: var(--teal);
+  font-size: 10px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .candidate-title-row {
@@ -675,6 +741,19 @@ button {
   border-radius: 50%;
   background: var(--teal);
   content: "";
+}
+
+.review-detail-list {
+  display: grid;
+  gap: 6px;
+  margin: 15px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #faf8f3;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  list-style: none;
 }
 
 .verify-list li::before {
@@ -804,6 +883,10 @@ button {
   .condition-grid {
     grid-template-columns: 1fr;
     gap: 0;
+  }
+
+  .need-choice-grid {
+    grid-template-columns: 1fr;
   }
 
   .parse-row,

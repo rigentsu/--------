@@ -31,6 +31,11 @@ test("server-renders the first consultation experience", async () => {
   assert.match(html, /よりそいナビ/);
   assert.match(html, /条件を設定する/);
   assert.match(html, /利用できそうな支援を探す/);
+  assert.match(html, /ご予算・世帯状況/);
+  assert.match(html, /郵便番号（任意）/);
+  assert.match(html, /葛飾区（デモ対象）/);
+  assert.match(html, /いま一番求めていること/);
+  assert.match(html, /学校に知られず匿名で相談したい/);
   assert.match(html, /開発デモ/);
   assert.match(html, /相談内容は保存されません/);
   assert.doesNotMatch(html, /Your site is taking shape|react-loading-skeleton/);

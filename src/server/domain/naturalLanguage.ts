@@ -40,10 +40,19 @@ export function parseNaturalLanguage(
 ): Partial<ConsultationConditions> {
   const parsed: Partial<ConsultationConditions> = {};
 
-  if (/新宿区/.test(input)) parsed.municipality = "新宿区";
+  if (/葛飾区/.test(input)) parsed.municipality = "葛飾区";
+  else if (/新宿区/.test(input)) parsed.municipality = "新宿区";
 
   const grade = gradePatterns.find(([pattern]) => pattern.test(input));
   if (grade) parsed.grade = grade[1];
+
+  if (/ひとり親|ひとり親世帯/.test(input)) {
+    parsed.household_status = "single_parent";
+  } else if (/完全無料|無料で利用|費用をかけず/.test(input)) {
+    parsed.household_status = "free";
+  } else if (/助成金|補助金|助成対象/.test(input)) {
+    parsed.household_status = "subsidy";
+  }
 
   const timeSlots: TimeSlot[] = [];
   if (/平日/.test(input) && !/夜|夜間|夕方/.test(input)) {
@@ -73,6 +82,16 @@ export function parseNaturalLanguage(
     /年収[^0-9０-９]{0,8}([0-9０-９,]+)\s*(万円|万|円)?/,
   );
   if (annualIncome !== undefined) parsed.annual_income = annualIncome;
+
+  if (/学校に知られず|匿名|誰にも知られず/.test(input)) {
+    parsed.priority_need = "stage1_anonymous";
+  } else if (/居場所|進路|学び場|フリースクール|教育支援/.test(input)) {
+    parsed.priority_need = "stage2_places";
+  } else if (/一人の時間|ひとりの時間|静かな場所|息抜き/.test(input)) {
+    parsed.priority_need = "respite";
+  } else if (/親の会|当事者交流|きょうだい|兄弟/.test(input)) {
+    parsed.priority_need = "family_peer";
+  }
 
   return parsed;
 }
