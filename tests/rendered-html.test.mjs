@@ -29,6 +29,9 @@ test("server-renders the first consultation experience", async () => {
 
   const html = await response.text();
   assert.match(html, /よりそいナビ/);
+  assert.match(html, /相談の入口/);
+  assert.match(html, /まず、あなたの呼び方を教えてください/);
+  assert.match(html, /本名を入力する必要はありません/);
   assert.match(html, /条件を設定する/);
   assert.match(html, /利用できそうな支援を探す/);
   assert.match(html, /ご予算・世帯状況/);

@@ -91,6 +91,279 @@ const priorityNeedOptions: Array<{
   },
 ];
 
+type IntakeQuestion = {
+  id: string;
+  number: string;
+  title: string;
+  prompt: string;
+  hint?: string;
+  selection: "single" | "multiple";
+  options: Array<{ value: string; label: string; exclusive?: boolean }>;
+};
+
+const intakeQuestions: IntakeQuestion[] = [
+  {
+    id: "call_me",
+    number: "Q0",
+    title: "呼び方",
+    prompt:
+      "まず、あなたの呼び方を教えてください。このあと、あなたのことを何とお呼びすればよいですか？",
+    hint: "※本名を入力する必要はありません。",
+    selection: "single",
+    options: [
+      { value: "mother", label: "お母さん" },
+      { value: "father", label: "お父さん" },
+      { value: "guardian", label: "保護者さん" },
+      { value: "other", label: "その他" },
+      { value: "custom", label: "自分で入力する" },
+      { value: "prefer_not", label: "答えたくない", exclusive: true },
+    ],
+  },
+  {
+    id: "consultation_topics",
+    number: "Q1",
+    title: "相談したいこと",
+    prompt: "今日はどんなことについて相談したいですか？",
+    hint: "複数選択できます。",
+    selection: "multiple",
+    options: [
+      { value: "reason", label: "子どもが学校に行けない理由を知りたい" },
+      { value: "communication", label: "子どもへの接し方を知りたい" },
+      { value: "school", label: "学校との関わり方を知りたい" },
+      { value: "home", label: "家での過ごし方を知りたい" },
+      { value: "study_path", label: "勉強・進路について相談したい" },
+      { value: "support", label: "利用できる支援について知りたい" },
+      { value: "self", label: "自分自身の不安や悩みを相談したい" },
+      { value: "unsure", label: "まだ何を相談したいか分からない" },
+      { value: "other", label: "その他" },
+    ],
+  },
+  {
+    id: "school_status",
+    number: "Q2",
+    title: "現在の学校との状況",
+    prompt: "お子さんの学校との関わりについて、近いものを教えてください。",
+    selection: "single",
+    options: [
+      { value: "attending", label: "今もほぼ毎日登校している" },
+      { value: "late_early", label: "遅刻・早退が増えている" },
+      { value: "more_absences", label: "休む日が増えている" },
+      { value: "rarely", label: "ほとんど学校に行っていない" },
+      { value: "long_absence", label: "長期間、学校に行っていない" },
+      { value: "recent", label: "最近、学校に行けなくなった" },
+      { value: "unknown", label: "よく分からない" },
+      { value: "prefer_not", label: "答えたくない", exclusive: true },
+    ],
+  },
+  {
+    id: "duration",
+    number: "Q3",
+    title: "いつ頃から？",
+    prompt: "その状態は、いつ頃から続いていますか？",
+    selection: "single",
+    options: [
+      { value: "one_week", label: "ここ1週間くらい" },
+      { value: "one_month", label: "1か月以内" },
+      { value: "one_to_three_months", label: "1〜3か月くらい" },
+      { value: "half_year", label: "半年くらい" },
+      { value: "over_year", label: "1年以上" },
+      { value: "unknown", label: "はっきり分からない" },
+      { value: "prefer_not", label: "答えたくない", exclusive: true },
+    ],
+  },
+  {
+    id: "main_concerns",
+    number: "Q4",
+    title: "今、一番気になっていること",
+    prompt: "今、お子さんについて一番気になっていることは何ですか？",
+    hint: "複数選択できます。",
+    selection: "multiple",
+    options: [
+      { value: "feelings", label: "子どもの気持ちが分からない" },
+      { value: "conversation", label: "子どもとの会話が難しい" },
+      { value: "encourage", label: "学校に行くよう声をかけるべきか迷っている" },
+      { value: "morning_health", label: "朝になると体調が悪くなる" },
+      { value: "stays_home", label: "家からあまり出なくなった" },
+      { value: "study_delay", label: "勉強の遅れが心配" },
+      { value: "friends", label: "友人関係が心配" },
+      { value: "future", label: "進路が心配" },
+      { value: "school_relationship", label: "学校との関係がうまくいっていない" },
+      { value: "family_disagreement", label: "家族間で意見が合わない" },
+      { value: "exhausted", label: "自分自身が疲れている" },
+      { value: "other", label: "その他" },
+      { value: "unknown", label: "まだ分からない" },
+      { value: "prefer_not", label: "答えたくない", exclusive: true },
+    ],
+  },
+  {
+    id: "recent_state",
+    number: "Q5",
+    title: "最近のお子さんの様子",
+    prompt: "最近のお子さんの様子について、当てはまるものはありますか？",
+    hint: "複数選択できます。",
+    selection: "multiple",
+    options: [
+      { value: "sometimes_well", label: "元気なときもある" },
+      { value: "same_at_home", label: "家では普段とあまり変わらない" },
+      { value: "goes_out", label: "外出することはある" },
+      { value: "interests", label: "好きなことには取り組めている" },
+      { value: "sleep", label: "睡眠リズムが変わった" },
+      { value: "appetite", label: "食欲が変わった" },
+      { value: "morning_health", label: "朝に体調が悪くなる" },
+      { value: "avoids_people", label: "人との関わりを避けるようになった" },
+      { value: "irritated", label: "イライラすることが増えた" },
+      { value: "anxious", label: "不安そうにしている" },
+      { value: "low_mood", label: "気分が落ち込んでいるように見える" },
+      { value: "unknown", label: "よく分からない" },
+      { value: "other", label: "その他" },
+      { value: "prefer_not", label: "答えたくない", exclusive: true },
+    ],
+  },
+];
+
+function IntakeQuestionnaire() {
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, string[]>>({});
+  const [customCallName, setCustomCallName] = useState("");
+  const isComplete = step >= intakeQuestions.length;
+  const question = intakeQuestions[Math.min(step, intakeQuestions.length - 1)];
+
+  function toggleAnswer(option: IntakeQuestion["options"][number]) {
+    if (!question) return;
+    setAnswers((current) => {
+      const selected = current[question.id] ?? [];
+      if (question.selection === "single") {
+        return {
+          ...current,
+          [question.id]: selected.includes(option.value) ? [] : [option.value],
+        };
+      }
+      if (option.exclusive) {
+        return {
+          ...current,
+          [question.id]: selected.includes(option.value) ? [] : [option.value],
+        };
+      }
+      const withoutExclusive = selected.filter((value) =>
+        question.options.every(
+          (candidate) => candidate.value !== value || !candidate.exclusive,
+        ),
+      );
+      return {
+        ...current,
+        [question.id]: withoutExclusive.includes(option.value)
+          ? withoutExclusive.filter((value) => value !== option.value)
+          : [...withoutExclusive, option.value],
+      };
+    });
+  }
+
+  const answeredCount = intakeQuestions.filter(
+    (item) => (answers[item.id]?.length ?? 0) > 0,
+  ).length;
+
+  if (isComplete) {
+    return (
+      <section className="panel intake-panel intake-complete" aria-label="相談の入口">
+        <div className="intake-complete-mark" aria-hidden="true">✓</div>
+        <div>
+          <p className="intake-kicker">相談の入口</p>
+          <h2>回答ありがとうございます</h2>
+          <p>
+            6問中{answeredCount}問に回答しました。答えなかった質問があっても問題ありません。
+            回答内容は保存・送信されず、現在はこの画面内での整理にだけ使用します。
+          </p>
+          <div className="intake-complete-actions">
+            <button className="ghost-button" type="button" onClick={() => setStep(0)}>
+              回答を見直す
+            </button>
+            <a className="intake-next-link" href="#search-conditions">
+              支援先の条件設定へ進む ↓
+            </a>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (!question) return null;
+  const selected = answers[question.id] ?? [];
+  const progress = ((step + 1) / intakeQuestions.length) * 100;
+
+  return (
+    <section className="panel intake-panel" aria-labelledby="intake-title">
+      <div className="intake-topline">
+        <div>
+          <p className="intake-kicker">相談の入口 · {question.number}</p>
+          <h2 id="intake-title">{question.title}</h2>
+        </div>
+        <span className="intake-progress-label">{step + 1} / {intakeQuestions.length}</span>
+      </div>
+      <div className="intake-progress" aria-hidden="true">
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <p className="intake-prompt">{question.prompt}</p>
+      {question.hint ? <p className="intake-hint">{question.hint}</p> : null}
+      <div
+        className="intake-options"
+        role="group"
+        aria-label={`${question.number} ${question.title}`}
+      >
+        {question.options.map((option) => {
+          const isSelected = selected.includes(option.value);
+          return (
+            <button
+              className="intake-option"
+              data-active={isSelected}
+              data-selection={question.selection}
+              type="button"
+              aria-pressed={isSelected}
+              key={option.value}
+              onClick={() => toggleAnswer(option)}
+            >
+              <span className="intake-check" aria-hidden="true">
+                {isSelected ? "✓" : ""}
+              </span>
+              <span>{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {question.id === "call_me" && selected.includes("custom") ? (
+        <label className="intake-custom-name" htmlFor="custom-call-name">
+          <span>呼んでほしい呼び方</span>
+          <input
+            id="custom-call-name"
+            className="input"
+            maxLength={30}
+            placeholder="例：〇〇さん（本名でなくて構いません）"
+            value={customCallName}
+            onChange={(event) => setCustomCallName(event.target.value)}
+          />
+        </label>
+      ) : null}
+      <div className="intake-navigation">
+        <button
+          className="intake-back"
+          type="button"
+          disabled={step === 0}
+          onClick={() => setStep((current) => Math.max(0, current - 1))}
+        >
+          ← 戻る
+        </button>
+        <span>回答せずに進んでも大丈夫です</span>
+        <button
+          className="intake-forward"
+          type="button"
+          onClick={() => setStep((current) => current + 1)}
+        >
+          {step === intakeQuestions.length - 1 ? "回答を確認" : "次へ"} →
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function formatYen(value: number) {
   return "¥" + value.toLocaleString("ja-JP");
 }
@@ -334,7 +607,13 @@ export default function ConsultationApp() {
           <span className="demo-badge">登録済みURLの情報をAIで整理 · 内容は要確認</span>
         </section>
 
-        <section className="workspace" aria-label="支援選択肢の検索ツール">
+        <IntakeQuestionnaire />
+
+        <section
+          className="workspace"
+          id="search-conditions"
+          aria-label="支援選択肢の検索ツール"
+        >
           <form
             className="panel form-panel"
             onSubmit={(event) => {
