@@ -44,6 +44,7 @@ export async function POST(request: Request) {
     const payload = ConsultApiSuccessSchema.parse({
       ok: true,
       conditions: output.conditions,
+      search_plan: output.search_plan,
       assistant_message: output.assistant_message,
       source: "foundry",
     });
@@ -51,10 +52,14 @@ export async function POST(request: Request) {
       headers: { "cache-control": "no-store" },
     });
   } catch (error) {
+    console.error(
+      "[api/consult]",
+      error instanceof Error ? error.message : "原因不明のエラーです。",
+    );
     if (error instanceof FoundryConfigurationError) {
       return errorResponse(
         "FOUNDRY_NOT_CONFIGURED",
-        "Microsoft Foundryの環境変数が未設定です。ローカル解析を使用します。",
+        "Microsoft Foundryの環境変数が未設定です。AIによる整理を開始できませんでした。",
         503,
       );
     }
@@ -62,14 +67,16 @@ export async function POST(request: Request) {
     if (error instanceof FoundryResponseError) {
       return errorResponse(
         "FOUNDRY_ERROR",
-        "Microsoft Foundryを利用できないため、ローカル解析を使用します。",
+        input.data.confirmed_results !== undefined
+          ? "支援候補の検索は完了しましたが、AIによる結果説明を取得できませんでした。候補はそのまま確認できます。"
+          : "Microsoft Foundryから検索計画を取得できませんでした。時間をおいてもう一度お試しください。",
         502,
       );
     }
 
     return errorResponse(
       "FOUNDRY_ERROR",
-      "AIサービスを利用できないため、ローカル解析を使用します。",
+      "AIサービスから応答を取得できませんでした。時間をおいてもう一度お試しください。",
       502,
     );
   }

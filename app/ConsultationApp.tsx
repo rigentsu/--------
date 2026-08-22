@@ -6,9 +6,9 @@ import {
   FilterResultSchema,
   SearchApiErrorSchema,
 } from "../src/server/domain/schemas";
-import { parseNaturalLanguage } from "../src/server/domain/naturalLanguage";
 import {
   ConsultApiResponseSchema,
+  type ConfirmedSearchResult,
   type ConsultationAnswer,
 } from "../src/server/ai/schemas";
 import type {
@@ -34,7 +34,7 @@ const initialConditions: ConsultationConditions = {
   priority_need: "stage2_places",
 };
 
-const CONSULT_TIMEOUT_MS = 50_000;
+const CONSULT_TIMEOUT_MS = 75_000;
 
 const gradeOptions: Array<{ value: Grade; label: string }> = [
   { value: "elementary_1", label: "小学1年生" },
@@ -300,17 +300,16 @@ const intakeQuestions: IntakeQuestion[] = [
 
 function IntakeQuestionnaire({
   onSupportFocusChange,
-  onConsult,
+  onComplete,
+  onEdit,
 }: {
   onSupportFocusChange: (focus: SupportFocus) => void;
-  onConsult: (answers: ConsultationAnswer[]) => Promise<string>;
+  onComplete: (answers: ConsultationAnswer[]) => void;
+  onEdit: () => void;
 }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [customCallName, setCustomCallName] = useState("");
-  const [assistantMessage, setAssistantMessage] = useState("");
-  const [consultError, setConsultError] = useState("");
-  const [isConsulting, setIsConsulting] = useState(false);
   const isComplete = step >= intakeQuestions.length;
   const question = intakeQuestions[Math.min(step, intakeQuestions.length - 1)];
 
@@ -356,26 +355,9 @@ function IntakeQuestionnaire({
     });
   }
 
-  async function requestAiResponse() {
-    setIsConsulting(true);
-    setConsultError("");
-    try {
-      setAssistantMessage(await onConsult(consultationAnswers()));
-    } catch (error) {
-      setAssistantMessage("");
-      setConsultError(
-        error instanceof Error
-          ? error.message
-          : "AIから応答を取得できませんでした。時間をおいてもう一度お試しください。",
-      );
-    } finally {
-      setIsConsulting(false);
-    }
-  }
-
   function finishQuestionnaire() {
     setStep(intakeQuestions.length);
-    void requestAiResponse();
+    onComplete(consultationAnswers());
   }
 
   if (isComplete) {
@@ -387,30 +369,14 @@ function IntakeQuestionnaire({
           <h2>回答ありがとうございます</h2>
           <p>
             {intakeQuestions.length}問中{answeredCount}問に回答しました。答えなかった質問があっても問題ありません。
-            回答内容は保存せず、相談内容を整理するためにAIへ送信します。
+            回答内容はこの画面内に保持しました。次に条件を設定し、検索ボタンを押すと、入口の回答と条件をまとめてAIへ送信します。
           </p>
-          <div className="ai-guidance" aria-live="polite">
-            <p className="ai-guidance-label">AIからのご案内</p>
-            {isConsulting ? (
-              <p>回答内容を整理しています…</p>
-            ) : assistantMessage ? (
-              <p className="ai-guidance-message">{assistantMessage}</p>
-            ) : consultError ? (
-              <div>
-                <p className="error-message">{consultError}</p>
-                <button className="ghost-button" type="button" onClick={() => void requestAiResponse()}>
-                  AIへもう一度送る
-                </button>
-              </div>
-            ) : null}
-          </div>
           <div className="intake-complete-actions">
             <button
               className="ghost-button"
               type="button"
               onClick={() => {
-                setAssistantMessage("");
-                setConsultError("");
+                onEdit();
                 setStep(0);
               }}
             >
@@ -527,6 +493,30 @@ function timeLabel(time: TimeSlot) {
   return timeOptions.find((option) => option.value === time)?.label ?? time;
 }
 
+function confirmedResultsForAi(result: FilterResult): ConfirmedSearchResult[] {
+  const matches: ConfirmedSearchResult[] = result.matches.map((resource) => ({
+    name: resource.name,
+    category: resource.category,
+    match_kind: "match",
+    reasons: resource.reasons,
+    verification_points: resource.verification_points,
+    estimated_self_pay: resource.cost.estimated_self_pay,
+    source_label: resource.source_label,
+  }));
+  const reviewCandidates: ConfirmedSearchResult[] = result.review_candidates.map(
+    (resource) => ({
+      name: resource.name,
+      category: resource.category,
+      match_kind: "review",
+      reasons: resource.review_reasons,
+      verification_points: resource.notes,
+      estimated_self_pay: null,
+      source_label: resource.source_label,
+    }),
+  );
+  return [...matches, ...reviewCandidates].slice(0, 10);
+}
+
 function ReviewCandidateCard({ resource }: { resource: ReviewResource }) {
   return (
     <article className="candidate-card review-card" key={resource.id}>
@@ -604,15 +594,16 @@ export default function ConsultationApp() {
     useState<ConsultationConditions>(initialConditions);
   const [results, setResults] = useState<FilterResult | null>(null);
   const [error, setError] = useState("");
-  const [parseNotice, setParseNotice] = useState("");
-  const [isParsing, setIsParsing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
-  const [supportFocus, setSupportFocus] = useState<SupportFocus>("find_support");
+  const [intakeAnswers, setIntakeAnswers] = useState<ConsultationAnswer[]>([]);
+  const [intakeComplete, setIntakeComplete] = useState(false);
+  const [searchProgress, setSearchProgress] = useState("");
+  const [aiSearchMessage, setAiSearchMessage] = useState("");
+  const [aiExplanationFailed, setAiExplanationFailed] = useState(false);
 
   function applySupportFocus(focus: SupportFocus) {
     const option = supportFocusOptions.find((item) => item.id === focus);
     if (!option) return;
-    setSupportFocus(focus);
     setConditions((current) => ({
       ...current,
       priority_need: option.priorityNeed,
@@ -620,7 +611,19 @@ export default function ConsultationApp() {
     setResults(null);
   }
 
-  async function handleIntakeConsult(consultationAnswers: ConsultationAnswer[]) {
+  function conditionsForAi(value: ConsultationConditions) {
+    return {
+      municipality: value.municipality,
+      grade: value.grade,
+      household_status: value.household_status,
+      preferred_times: value.preferred_times,
+      can_pickup: value.can_pickup,
+      monthly_budget: value.monthly_budget,
+      priority_need: value.priority_need,
+    };
+  }
+
+  async function requestAiConsult(payload: Record<string, unknown>) {
     const controller = new AbortController();
     const timeout = window.setTimeout(
       () => controller.abort(),
@@ -631,18 +634,7 @@ export default function ConsultationApp() {
       const response = await fetch("/api/consult", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          consultation_answers: consultationAnswers,
-          current_conditions: {
-            municipality: conditions.municipality,
-            grade: conditions.grade,
-            household_status: conditions.household_status,
-            preferred_times: conditions.preferred_times,
-            can_pickup: conditions.can_pickup,
-            monthly_budget: conditions.monthly_budget,
-            priority_need: conditions.priority_need,
-          },
-        }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
       const responseBody: unknown = await response.json().catch(() => null);
@@ -652,11 +644,7 @@ export default function ConsultationApp() {
       }
       const data = parsedResponse.data;
       if (!data.ok) throw new Error(data.message);
-      if (Object.keys(data.conditions).length > 0) {
-        setConditions((current) => ({ ...current, ...data.conditions }));
-        setResults(null);
-      }
-      return data.assistant_message;
+      return data;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         throw new Error("AIの応答に時間がかかっています。もう一度お試しください。");
@@ -667,101 +655,98 @@ export default function ConsultationApp() {
     }
   }
 
-  async function handleParse() {
-    if (!naturalText.trim()) {
-      setParseNotice("");
-      setError("補足内容を入力してから反映してください。");
-      return;
+  async function requestSearch(searchConditions: ConsultationConditions) {
+    const validated = ConsultationConditionsSchema.safeParse(searchConditions);
+    if (!validated.success) {
+      throw new Error(
+        "地域、学年、時間帯、世帯状況、月の予算を入力してから検索してください。",
+      );
     }
-
-    setIsParsing(true);
-    setError("");
-
-    const controller = new AbortController();
-    const timeout = window.setTimeout(
-      () => controller.abort(),
-      CONSULT_TIMEOUT_MS,
-    );
-
-    try {
-      const response = await fetch("/api/consult", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ text: naturalText }),
-        signal: controller.signal,
-      });
-      const responseBody: unknown = await response.json().catch(() => null);
-      const parsedResponse = ConsultApiResponseSchema.safeParse(responseBody);
-
-      if (response.ok && parsedResponse.success) {
-        const data = parsedResponse.data;
-        if (data.ok && Object.keys(data.conditions).length > 0) {
-          setConditions((current) => ({
-            ...current,
-            ...data.conditions,
-          }));
-          setResults(null);
-          setParseNotice(
-            `${data.assistant_message} 内容を確認してから検索してください。`,
-          );
-          return;
-        }
-      }
-    } catch {
-      // The deterministic local parser below keeps the prototype usable offline.
-    } finally {
-      window.clearTimeout(timeout);
-      setIsParsing(false);
+    const response = await fetch("/api/search", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ conditions: validated.data }),
+    });
+    const responseBody: unknown = await response.json().catch(() => null);
+    const parsedResponse = FilterResultSchema.safeParse(responseBody);
+    if (!response.ok || !parsedResponse.success) {
+      const errorBody = SearchApiErrorSchema.safeParse(responseBody);
+      throw new Error(
+        errorBody.success
+          ? errorBody.data.message
+          : "登録済みURLから情報を取得・整理できませんでした。URLとMicrosoft Foundryの設定を確認してください。",
+      );
     }
-
-    const parsed = parseNaturalLanguage(naturalText);
-    if (Object.keys(parsed).length === 0) {
-      setParseNotice("");
-      setError("条件を読み取れませんでした。下の固定フォームに入力してください。");
-      return;
-    }
-
-    setConditions((current) => ({ ...current, ...parsed }));
-    setResults(null);
-    setError("");
-    setParseNotice(
-      "AI解析を利用できなかったため、簡易解析で反映しました。内容を確認してから検索してください。",
-    );
+    return parsedResponse.data;
   }
 
   async function handleSearch() {
+    if (!intakeComplete) {
+      setResults(null);
+      setAiSearchMessage("");
+      setAiExplanationFailed(false);
+      setError("先に「相談の入口」を最後まで進めてから、条件を設定してください。");
+      return;
+    }
+
     const validated = ConsultationConditionsSchema.safeParse(conditions);
     if (!validated.success) {
       setResults(null);
+      setAiSearchMessage("");
+      setAiExplanationFailed(false);
       setError("地域、学年、時間帯、世帯状況、月の予算を入力してから検索してください。");
       return;
     }
 
     setIsSearching(true);
     setError("");
-    setParseNotice("");
+    setAiSearchMessage("");
+    setAiExplanationFailed(false);
 
     try {
-      const response = await fetch("/api/search", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ conditions: validated.data }),
+      setSearchProgress("相談の入口と条件設定をまとめてAIへ送っています…");
+      const planning = await requestAiConsult({
+        text: naturalText.trim(),
+        consultation_answers: intakeAnswers,
+        current_conditions: conditionsForAi(conditions),
       });
-      const responseBody: unknown = await response.json().catch(() => null);
-      const parsedResponse = FilterResultSchema.safeParse(responseBody);
 
-      if (!response.ok || !parsedResponse.success) {
-        const errorBody = SearchApiErrorSchema.safeParse(responseBody);
-        throw new Error(
-          errorBody.success
-            ? errorBody.data.message
-            : "登録済みURLから情報を取得・整理できませんでした。URLとMicrosoft Foundryの設定を確認してください。",
-        );
+      if (planning.search_plan.safety_priority) {
+        setResults(null);
+        setAiSearchMessage(planning.assistant_message);
+        return;
       }
 
-      setResults(parsedResponse.data);
+      const plannedConditions: ConsultationConditions = {
+        ...conditions,
+        ...planning.conditions,
+        priority_need: planning.search_plan.priority_need,
+      };
+      setConditions(plannedConditions);
+
+      setSearchProgress("AIが整理した条件で登録済み情報を検索しています…");
+      const searchResult = await requestSearch(plannedConditions);
+      setResults(searchResult);
+
+      setSearchProgress("検索結果と相談内容をAIがまとめています…");
+      try {
+        const explanation = await requestAiConsult({
+          text: naturalText.trim(),
+          consultation_answers: intakeAnswers,
+          current_conditions: conditionsForAi(plannedConditions),
+          confirmed_results: confirmedResultsForAi(searchResult),
+        });
+        setAiSearchMessage(explanation.assistant_message);
+      } catch {
+        setAiExplanationFailed(true);
+        setAiSearchMessage(
+          "支援候補の検索は完了しています。AIによる結果説明だけを取得できませんでしたが、下の候補と公式情報はそのまま確認できます。",
+        );
+      }
     } catch (error) {
       setResults(null);
+      setAiSearchMessage("");
+      setAiExplanationFailed(false);
       setError(
         error instanceof Error
           ? error.message
@@ -769,6 +754,7 @@ export default function ConsultationApp() {
       );
     } finally {
       setIsSearching(false);
+      setSearchProgress("");
     }
   }
 
@@ -806,14 +792,25 @@ export default function ConsultationApp() {
             いっしょに<em>選択肢を見てみる。</em>
           </h1>
           <p className="hero-lead">
-            まずは基本条件だけで検索できます。必要に応じて、下の補足欄に自由に入力した内容を条件へ反映できます。診断や唯一の答えを出すものではありません。
+            まず相談の入口に回答し、次に条件を設定してください。両方の情報をまとめてAIが検索計画を作り、登録済み情報から選択肢を探します。診断や唯一の答えを出すものではありません。
           </p>
           <span className="demo-badge">登録済みURLの情報をAIで整理 · 内容は要確認</span>
         </section>
 
         <IntakeQuestionnaire
           onSupportFocusChange={applySupportFocus}
-          onConsult={handleIntakeConsult}
+          onComplete={(answers) => {
+            setIntakeAnswers(answers);
+            setIntakeComplete(true);
+            setResults(null);
+            setAiSearchMessage("");
+            setError("");
+          }}
+          onEdit={() => {
+            setIntakeComplete(false);
+            setResults(null);
+            setAiSearchMessage("");
+          }}
         />
 
         <section
@@ -831,7 +828,7 @@ export default function ConsultationApp() {
             <div className="panel-heading">
               <div>
                 <h2>条件を設定する</h2>
-                <p>入力した条件だけを使って、利用できそうな支援を検索します。</p>
+                <p>相談の入口の回答と、ここで設定した条件をまとめてAI検索に使います。</p>
               </div>
             </div>
 
@@ -970,28 +967,6 @@ export default function ConsultationApp() {
               </div>
             </div>
 
-            <div className="field-group">
-              <span className="field-label">いま一番求めていること</span>
-              <span className="field-hint">
-                選んだ内容を、近い支援カテゴリへ整理して検索します。
-              </span>
-              <div className="need-choice-grid">
-                {supportFocusOptions.map((option) => (
-                  <button
-                    className="need-choice-button"
-                    data-active={supportFocus === option.id}
-                    key={option.id}
-                    type="button"
-                    aria-pressed={supportFocus === option.id}
-                    onClick={() => applySupportFocus(option.id)}
-                  >
-                    <strong>{option.label}</strong>
-                    <span>{option.description}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="condition-grid">
               <label className="field-group" htmlFor="monthly-budget">
                 <span className="field-label">月に負担できる金額</span>
@@ -1042,9 +1017,13 @@ export default function ConsultationApp() {
             </div>
 
             <button className="primary-button" type="submit" disabled={isSearching}>
-              {isSearching ? "登録済みURLを確認中…" : "利用できそうな支援を探す"}{" "}
+              {isSearching ? "AIと登録済み情報を確認中…" : "回答と条件をまとめて支援を探す"}{" "}
               <span aria-hidden="true">→</span>
             </button>
+
+            {searchProgress ? (
+              <p className="search-progress" role="status">{searchProgress}</p>
+            ) : null}
 
             <div className="form-disclaimer">
               入力内容はこのページ内のデモ検索にのみ使用し、氏名、学校名、診断情報は求めません。
@@ -1056,7 +1035,7 @@ export default function ConsultationApp() {
                 <div>
                   <span className="field-label">補足を入力する（任意）</span>
                   <p className="field-hint">
-                    ほかに伝えておきたいことがある場合だけ使えます。AI解析を利用できない場合は簡易解析へ切り替わります。
+                    ほかに伝えておきたいことがある場合だけ入力してください。検索時に、相談の入口と条件設定と一緒にAIへ送ります。
                   </p>
                 </div>
                 <span className="chat-mark" aria-hidden="true">＋</span>
@@ -1073,18 +1052,9 @@ export default function ConsultationApp() {
               />
               <div className="parse-row">
                 <span className="parse-hint">
-                  基本条件だけで検索できます。補足を反映した後は、上の検索ボタンをもう一度押してください。
+                  この補足も、検索ボタンを押した時に相談の入口と条件設定にまとめて反映されます。
                 </span>
-                <button
-                  className="ghost-button"
-                  type="button"
-                  disabled={isParsing}
-                  onClick={handleParse}
-                >
-                  {isParsing ? "読み取り中…" : "補足を条件に反映"}
-                </button>
               </div>
-              {parseNotice ? <p className="field-hint">{parseNotice}</p> : null}
             </div>
           </form>
 
@@ -1104,18 +1074,31 @@ export default function ConsultationApp() {
               </div>
             </div>
 
-            {!results ? (
-              <div className="empty-state">
-                <div>
-                  <div className="empty-illustration" aria-hidden="true">
-                    ◌
-                  </div>
-                  <h3>条件から始めましょう</h3>
-                  <p>
-                    右側に複数の候補を表示し、費用、残った理由、もう一度確認したい内容をそれぞれ説明します。
-                  </p>
-                </div>
+            {aiSearchMessage ? (
+              <div className="results-ai-guidance">
+                <p className="ai-guidance-label">
+                  {aiExplanationFailed
+                    ? "AIによる結果説明のみ取得できませんでした"
+                    : "相談内容と検索結果を踏まえたAIのご案内"}
+                </p>
+                <p className="ai-guidance-message">{aiSearchMessage}</p>
               </div>
+            ) : null}
+
+            {!results ? (
+              aiSearchMessage ? null : (
+                <div className="empty-state">
+                  <div>
+                    <div className="empty-illustration" aria-hidden="true">
+                      ◌
+                    </div>
+                    <h3>相談の入口と条件設定から始めましょう</h3>
+                    <p>
+                      両方が終わったら、AIが情報をまとめて登録済みの支援候補を探します。
+                    </p>
+                  </div>
+                </div>
+              )
             ) : results.matches.length === 0 && results.review_candidates.length === 0 ? (
               <div className="empty-state">
                 <div>

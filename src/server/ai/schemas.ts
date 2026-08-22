@@ -39,6 +39,48 @@ export const ConsultationAnswerSchema = z
   })
   .strict();
 
+export const SupportCategorySchema = z.enum([
+  "parent_consultation",
+  "child_communication",
+  "school_coordination",
+  "learning_place",
+  "home_life",
+  "future_path",
+  "family_support",
+]);
+
+export const AiSearchPlanSchema = z
+  .object({
+    summary: z.string().trim().max(500).optional().default(""),
+    priority_need: z.enum(PRIORITY_NEEDS).optional().default("all"),
+    support_categories: z
+      .array(SupportCategorySchema)
+      .max(7)
+      .optional()
+      .default([]),
+    search_reasons: z
+      .array(z.string().trim().min(1).max(180))
+      .max(5)
+      .optional()
+      .default([]),
+    safety_priority: z.boolean().optional().default(false),
+  })
+  .strict();
+
+export const ConfirmedSearchResultSchema = z
+  .object({
+    name: z.string().trim().min(1).max(200),
+    category: z.enum(["public", "private"]),
+    match_kind: z.enum(["match", "review"]),
+    reasons: z.array(z.string().trim().min(1).max(300)).max(10),
+    verification_points: z
+      .array(z.string().trim().min(1).max(500))
+      .max(12),
+    estimated_self_pay: z.number().finite().nonnegative().nullable(),
+    source_label: z.string().trim().min(1).max(200),
+  })
+  .strict();
+
 export const ConsultationRequestSchema = z
   .object({
     text: z.string().trim().max(2_000).optional().default(""),
@@ -48,6 +90,10 @@ export const ConsultationRequestSchema = z
       .optional()
       .default([]),
     current_conditions: ExtractedConditionsSchema.optional(),
+    confirmed_results: z
+      .array(ConfirmedSearchResultSchema)
+      .max(10)
+      .optional(),
   })
   .strict()
   .refine(
@@ -61,6 +107,7 @@ export const ConsultationRequestSchema = z
 export const FoundryOutputSchema = z
   .object({
     conditions: ExtractedConditionsSchema,
+    search_plan: AiSearchPlanSchema.optional().default({}),
     assistant_message: z
       .string()
       .trim()
@@ -94,6 +141,7 @@ export const FoundryResponsesSchema = z
 export const ConsultApiSuccessSchema = z.object({
   ok: z.literal(true),
   conditions: ExtractedConditionsSchema,
+  search_plan: AiSearchPlanSchema,
   assistant_message: z.string(),
   source: z.literal("foundry"),
 });
@@ -112,6 +160,8 @@ export const ConsultApiResponseSchema = z.discriminatedUnion("ok", [
 export type ExtractedConditions = z.infer<typeof ExtractedConditionsSchema>;
 export type ConsultationRequest = z.infer<typeof ConsultationRequestSchema>;
 export type ConsultationAnswer = z.infer<typeof ConsultationAnswerSchema>;
+export type AiSearchPlan = z.infer<typeof AiSearchPlanSchema>;
+export type ConfirmedSearchResult = z.infer<typeof ConfirmedSearchResultSchema>;
 export type FoundryOutput = z.infer<typeof FoundryOutputSchema>;
 export type ConsultApiResponse = z.infer<typeof ConsultApiResponseSchema>;
 

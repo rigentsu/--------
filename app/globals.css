@@ -394,32 +394,6 @@ button {
   line-height: 1.7;
 }
 
-.ai-guidance {
-  max-width: 760px;
-  margin-top: 18px;
-  padding: 17px 18px;
-  border: 1px solid #cfe0db;
-  border-radius: 14px;
-  background: var(--blue-soft);
-}
-
-.intake-complete .ai-guidance-label {
-  margin: 0;
-  color: var(--teal-dark);
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-}
-
-.intake-complete .ai-guidance-message {
-  color: var(--ink);
-  white-space: pre-line;
-}
-
-.ai-guidance .ghost-button {
-  margin-top: 12px;
-}
-
 .intake-complete-actions {
   display: flex;
   align-items: center;
@@ -608,42 +582,7 @@ button {
   font-weight: 800;
 }
 
-.need-choice-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.need-choice-button {
-  display: grid;
-  gap: 5px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: white;
-  padding: 12px;
-  color: var(--ink);
-  text-align: left;
-}
-
-.need-choice-button strong {
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.need-choice-button span {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.45;
-}
-
-.need-choice-button[data-active="true"] {
-  border-color: var(--teal);
-  background: var(--blue-soft);
-  box-shadow: inset 0 0 0 1px var(--teal);
-}
-
 .choice-button:focus-visible,
-.need-choice-button:focus-visible,
 .ghost-button:focus-visible,
 .primary-button:focus-visible,
 .source-link:focus-visible {
@@ -674,6 +613,14 @@ button {
   margin-top: 18px;
   color: var(--muted);
   font-size: 11px;
+  line-height: 1.6;
+}
+
+.search-progress {
+  margin: 12px 0 0;
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 800;
   line-height: 1.6;
 }
 
@@ -770,6 +717,30 @@ button {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
+}
+
+.results-ai-guidance {
+  margin: 0 0 22px;
+  padding: 17px 18px;
+  border: 1px solid #cfe0db;
+  border-radius: 14px;
+  background: var(--blue-soft);
+}
+
+.ai-guidance-label {
+  margin: 0;
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.ai-guidance-message {
+  margin: 9px 0 0;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.75;
+  white-space: pre-line;
 }
 
 .result-count {
@@ -1135,10 +1106,6 @@ button {
   .intake-complete-actions {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .need-choice-grid {
-    grid-template-columns: 1fr;
   }
 
   .parse-row,

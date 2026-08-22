@@ -37,7 +37,7 @@ type FoundryConfig = {
   transport: FoundryTransport;
 };
 
-const FOUNDRY_REQUEST_TIMEOUT_MS = 45_000;
+const FOUNDRY_REQUEST_TIMEOUT_MS = 70_000;
 
 async function withTimeout<T>(
   operation: (signal: AbortSignal) => Promise<T>,
@@ -271,6 +271,35 @@ function extractJsonObject(content: string) {
   }
 }
 
+function selectAllowedFoundryOutput(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  const rawConditions =
+    record.conditions &&
+    typeof record.conditions === "object" &&
+    !Array.isArray(record.conditions)
+      ? (record.conditions as Record<string, unknown>)
+      : record.conditions;
+  const conditions =
+    rawConditions && typeof rawConditions === "object"
+      ? {
+          municipality: rawConditions.municipality,
+          grade: rawConditions.grade,
+          household_status: rawConditions.household_status,
+          preferred_times: rawConditions.preferred_times,
+          can_pickup: rawConditions.can_pickup,
+          monthly_budget: rawConditions.monthly_budget,
+          annual_income: rawConditions.annual_income,
+          priority_need: rawConditions.priority_need,
+        }
+      : rawConditions;
+  return {
+    conditions,
+    search_plan: record.search_plan,
+    assistant_message: record.assistant_message,
+  };
+}
+
 export const CONSULTATION_SAFETY_SYSTEM_PROMPT = `あなたは不登校児童・生徒を支援する情報提供AIです。
 
 【基本原則】
@@ -302,20 +331,35 @@ export const CONSULTATION_SAFETY_SYSTEM_PROMPT = `あなたは不登校児童・
 これらを検知した場合、具体的な危険行為を助長する情報を提供せず、
 利用者の現在の安全を確認し、信頼できる大人や適切な支援先への相談を促す。`;
 
-function systemPrompt() {
+function systemPrompt(hasConfirmedResults: boolean) {
   return [
     CONSULTATION_SAFETY_SYSTEM_PROMPT,
     "【この機能での役割】",
-    "あなたは、保護者のQ0〜Q6の回答、現在の検索条件、任意の補足文を整理し、次に考えられる選択肢を短く案内するアシスタントです。",
+    hasConfirmedResults
+      ? "あなたは、保護者のQ0〜Q6の回答と、アプリが登録済み情報から確認した検索結果を整理して説明するアシスタントです。"
+      : "あなたは、保護者のQ0〜Q6の回答と現在の検索条件から、安全な支援先検索計画を作るアシスタントです。",
     "入力に明示された情報だけを使い、推測や診断をしないでください。回答していない項目を問題として扱わないでください。",
     "current_conditionsは支援先検索フォームの現在値であり、初期値を含む可能性があります。相談内容の要約ではconsultation_answersを優先し、回答にない家庭状況を事実として述べないでください。",
     "子どもの氏名、学校名、詳細住所などは出力に含めないでください。",
-    "必ず次のJSONだけを返してください。Markdownや説明文は不要です。",
-    '{"conditions":{},"assistant_message":"回答ありがとうございます。現在の状況を整理すると…。\n\n一緒に考えられることは…。\n\n次の一歩として…があります。"}',
+    "必ず次のJSONだけを返してください。Markdownや説明文は不要です。入力にあるconsultation_answers、current_conditions、confirmed_resultsを出力へコピーしないでください。",
+    hasConfirmedResults
+      ? '{"conditions":{},"assistant_message":"確認済みの検索結果についての簡潔な説明"}'
+      : '{"conditions":{},"search_plan":{"summary":"回答から確認できる相談状況の要約","priority_need":"all","support_categories":[],"search_reasons":[],"safety_priority":false},"assistant_message":"回答ありがとうございます。現在の状況を整理しています。"}',
+    hasConfirmedResults
+      ? "検索計画はすでに完了しています。search_planを生成し直さず、conditionsは空のままにしてください。"
+      : "search_plan.support_categoriesで使える値は、parent_consultation・child_communication・school_coordination・learning_place・home_life・future_path・family_supportです。回答に合うものだけを選んでください。",
+    hasConfirmedResults
+      ? "assistant_messageは600文字以内で簡潔にまとめてください。"
+      : "search_plan.priority_needは、匿名相談や声かけ・状況整理ならstage1_anonymous、居場所・学習・進路ならstage2_places、保護者や本人の休息ならrespite、家族会や当事者交流ならfamily_peer、限定できない場合はallです。conditions.priority_needにも同じ値を入れてください。",
+    hasConfirmedResults
+      ? ""
+      : "search_plan.search_reasonsには、検索で重視する理由を回答内容に基づき最大5件入れてください。安全情報を優先すべき場合はsearch_plan.safety_priorityをtrueにし、conditionsを空にしてください。",
+    hasConfirmedResults
+      ? "confirmed_resultsに含まれる候補だけを説明してください。候補ごとに、回答内容との関係、確認済みの一致点、利用前に確認する点を分け、順位を付けずに説明してください。料金・空き状況・利用可否を断定せず、最初の問い合わせで確認できる質問も示してください。confirmed_resultsが空の場合は、完全一致がなかったことを責めない表現で説明し、条件を広げる選択肢を示してください。"
+      : "この段階では施設名、料金、空き状況、制度の利用可否を生成しないでください。assistant_messageでは回答を短く受け止め、これから登録済み情報を検索することを説明してください。",
     "assistant_messageは、最初に気持ちを受け止め、次に回答内容を断定せず整理し、最後に2〜4個の現実的な選択肢または次の一歩を示してください。登校だけを目標にせず、本人と保護者の負担に配慮してください。",
-    "施設名、料金、空き状況、制度の利用可否は、この入力に確認済み検索結果が含まれないため生成しないでください。支援先は、この後にアプリの登録済み情報から検索するよう案内してください。",
     "Q0が『お母さん』『お父さん』『保護者さん』の場合はその呼び方を使用できます。『自分で入力する』『その他』『答えたくない』の場合は『保護者の方』と呼び、入力されていない名前を作らないでください。",
-    "安全情報に該当する危険が疑われる場合は、conditionsを空にし、assistant_messageで現在の安全を短く確認したうえで、信頼できる大人や適切な緊急・専門窓口への相談を促してください。入力に含まれる個人情報や危険行為の具体的内容は繰り返さないでください。",
+    "安全情報に該当する危険が疑われる場合は、conditionsを空にし、search_plan.safety_priorityをtrueにして、assistant_messageで現在の安全を短く確認したうえで、信頼できる大人や適切な緊急・専門窓口への相談を促してください。入力に含まれる個人情報や危険行為の具体的内容は繰り返さないでください。",
     "分からない項目はconditionsから省略してください。利用可能な値は、学年が elementary_1〜elementary_6 または junior_high_1〜junior_high_3、世帯状況が all・free・single_parent・subsidy、時間帯が weekday_afternoon・weekday_evening・saturday_morning、送迎が yes・no・unknown、いま一番求めていることが all・stage1_anonymous・stage2_places・respite・family_peer です。金額は整数の円で返してください。",
   ].join("\n");
 }
@@ -334,8 +378,12 @@ async function requestChatCompletion(
       ? {
           model: config.deploymentName,
           instructions: systemMessage?.content,
-          input: userMessages.map((message) => message.content).join("\n\n"),
+          input: [
+            "JSON形式で回答してください。",
+            userMessages.map((message) => message.content).join("\n\n"),
+          ].join("\n\n"),
           max_output_tokens: maxTokens,
+          reasoning: { effort: "low" },
           text: { format: { type: "json_object" } },
         }
       : {
@@ -365,7 +413,7 @@ async function requestChatCompletion(
   } catch (error) {
     if (isAbortError(error)) {
       throw new FoundryResponseError(
-        "Microsoft Foundryへの接続がタイムアウトしました（45秒）。",
+        "Microsoft Foundryへの接続がタイムアウトしました（70秒）。",
       );
     }
     throw new FoundryResponseError("Microsoft Foundryへの接続に失敗しました。");
@@ -422,17 +470,22 @@ export async function callFoundry(
           consultation_answers: input.consultation_answers,
           current_conditions: input.current_conditions ?? {},
           supplement: input.text || null,
+          confirmed_results: input.confirmed_results,
         });
+  const hasConfirmedResults =
+    typeof input !== "string" && input.confirmed_results !== undefined;
   const content = await requestChatCompletion(
     env,
     [
-      { role: "system", content: systemPrompt() },
+      { role: "system", content: systemPrompt(hasConfirmedResults) },
       { role: "user", content: userContent },
     ],
-    3_000,
+    hasConfirmedResults ? 1_000 : 1_400,
   );
 
-  const output = FoundryOutputSchema.safeParse(extractJsonObject(content));
+  const output = FoundryOutputSchema.safeParse(
+    selectAllowedFoundryOutput(extractJsonObject(content)),
+  );
   if (!output.success) {
     const details = output.error.issues
       .slice(0, 3)

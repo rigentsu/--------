@@ -115,7 +115,11 @@ test("Project endpointにはResponses API形式でinstructionsとinputを送る"
     );
     const capturedBody = requestBody as unknown as Record<string, unknown>;
     assert.equal(capturedBody.model, "gpt-5-mini");
-    const sentInput = JSON.parse(String(capturedBody.input)) as {
+    const serializedInput = String(capturedBody.input);
+    assert.match(serializedInput, /^JSON形式で回答してください。/);
+    const sentInput = JSON.parse(
+      serializedInput.replace(/^JSON形式で回答してください。\s*/, ""),
+    ) as {
       consultation_answers: Array<{ question_id: string; answers: string[] }>;
       current_conditions: { municipality: string; priority_need: string };
       supplement: string | null;
@@ -143,8 +147,9 @@ test("Project endpointにはResponses API形式でinstructionsとinputを送る"
         instructions.indexOf("【この機能での役割】"),
     );
     assert.equal("temperature" in capturedBody, false);
-    assert.equal("reasoning" in capturedBody, false);
+    assert.deepEqual(capturedBody.reasoning, { effort: "low" });
     assert.deepEqual(capturedBody.text, { format: { type: "json_object" } });
+    assert.equal(capturedBody.max_output_tokens, 1_400);
     assert.equal(result.conditions.priority_need, "stage2_places");
   } finally {
     globalThis.fetch = originalFetch;
@@ -180,6 +185,73 @@ test("Project Responses APIのoutput配列から本文を抽出する", async ()
       "テスト",
     );
     assert.equal(result.assistant_message, "抽出しました。");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("確認済み検索結果だけをAI説明へ渡し余分な出力項目は採用しない", async () => {
+  const originalFetch = globalThis.fetch;
+  let instructions = "";
+  let maxOutputTokens: unknown;
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as {
+      instructions?: string;
+      max_output_tokens?: unknown;
+    };
+    instructions = body.instructions ?? "";
+    maxOutputTokens = body.max_output_tokens;
+    return Response.json({
+      output_text: JSON.stringify({
+        conditions: {
+          priority_need: "stage1_anonymous",
+          time: "AIが追加した未許可フィールド",
+        },
+        search_plan: {
+          summary: "相談窓口を探します。",
+          priority_need: "stage1_anonymous",
+          support_categories: ["parent_consultation"],
+          search_reasons: ["保護者相談を希望"],
+          safety_priority: false,
+        },
+        assistant_message: "確認済み候補について説明します。",
+        confirmed_results: [{ name: "出力へコピーしない候補" }],
+      }),
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await callFoundry(
+      {
+        MS_FOUNDRY_ENDPOINT:
+          "https://example.services.ai.azure.com/api/projects/yorisoi",
+        MS_FOUNDRY_DEPLOYMENT_NAME: "gpt-5-mini",
+        MS_FOUNDRY_API_KEY: "test-only-key",
+      },
+      {
+        text: "",
+        consultation_answers: [],
+        current_conditions: { priority_need: "stage1_anonymous" },
+        confirmed_results: [
+          {
+            name: "確認済み相談窓口",
+            category: "public",
+            match_kind: "review",
+            reasons: ["希望する支援内容に対応"],
+            verification_points: ["受付状況を確認"],
+            estimated_self_pay: null,
+            source_label: "公式情報",
+          },
+        ],
+      },
+    );
+
+    assert.match(instructions, /confirmed_resultsに含まれる候補だけ/);
+    assert.match(instructions, /search_planを生成し直さず/);
+    assert.equal(maxOutputTokens, 1_000);
+    assert.equal(result.assistant_message, "確認済み候補について説明します。");
+    assert.equal("time" in result.conditions, false);
+    assert.equal("confirmed_results" in result, false);
   } finally {
     globalThis.fetch = originalFetch;
   }
