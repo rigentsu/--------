@@ -311,7 +311,7 @@ function systemPrompt() {
     "必ず次のJSONだけを返してください。Markdownや説明文は不要です。",
     '{"conditions":{},"assistant_message":"補足情報を反映しました。"}',
     "安全情報に該当する危険が疑われる場合は、conditionsを空にし、assistant_messageで現在の安全を短く確認したうえで、信頼できる大人や適切な緊急・専門窓口への相談を促してください。入力に含まれる個人情報や危険行為の具体的内容は繰り返さないでください。",
-    "分からない項目はconditionsから省略してください。利用可能な値は、学年が elementary_1〜elementary_6 または junior_high_1〜junior_high_3、世帯状況が all・free・single_parent・subsidy、時間帯が weekday_afternoon・weekday_evening・saturday_morning、送迎が yes・no・unknown、いま一番求めていることが stage1_anonymous・stage2_places・respite・family_peer です。金額は整数の円で返してください。",
+    "分からない項目はconditionsから省略してください。利用可能な値は、学年が elementary_1〜elementary_6 または junior_high_1〜junior_high_3、世帯状況が all・free・single_parent・subsidy、時間帯が weekday_afternoon・weekday_evening・saturday_morning、送迎が yes・no・unknown、いま一番求めていることが all・stage1_anonymous・stage2_places・respite・family_peer です。金額は整数の円で返してください。",
   ].join("\n");
 }
 

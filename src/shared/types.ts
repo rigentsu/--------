@@ -31,6 +31,7 @@ export const HOUSEHOLD_STATUSES = [
 export type HouseholdStatus = (typeof HOUSEHOLD_STATUSES)[number];
 
 export const PRIORITY_NEEDS = [
+  "all",
   "stage1_anonymous",
   "stage2_places",
   "respite",

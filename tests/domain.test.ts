@@ -80,6 +80,26 @@ test("世帯状況といま一番求めていることも抽出する", () => {
   );
 });
 
+test("希望を限定しない場合は支援カテゴリで除外しない", () => {
+  const conditions = ConsultationConditionsSchema.parse({
+    municipality: "新宿区",
+    grade: "junior_high_2",
+    household_status: "all",
+    preferred_times: ["weekday_afternoon"],
+    can_pickup: "unknown",
+    monthly_budget: 30_000,
+    annual_income: 0,
+    priority_need: "all",
+  });
+  const resource = {
+    ...rawResources[0],
+    supported_needs: ["family_peer"],
+  } as SupportResource;
+
+  const result = filterSupportResources(conditions, [resource]);
+  assert.equal(result.matches.length, 1);
+});
+
 test("ホワイトリスト内の公営・民間の候補を複数残す", () => {
   const conditions = ConsultationConditionsSchema.parse({
     municipality: "新宿区",

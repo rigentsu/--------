@@ -64,30 +64,92 @@ const householdOptions: Array<{ value: HouseholdStatus; label: string }> = [
   { value: "subsidy", label: "助成金対象" },
 ];
 
-const priorityNeedOptions: Array<{
-  value: PriorityNeed;
-  title: string;
+type SupportFocus =
+  | "voice"
+  | "organize"
+  | "learn"
+  | "school_discussion"
+  | "find_support"
+  | "future"
+  | "home"
+  | "listen"
+  | "unknown"
+  | "other"
+  | "prefer_not";
+
+const supportFocusOptions: Array<{
+  id: SupportFocus;
+  label: string;
   description: string;
+  priorityNeed: PriorityNeed;
+  exclusive?: boolean;
 }> = [
   {
-    value: "stage1_anonymous",
-    title: "🔒 学校に知られず匿名で相談したい",
-    description: "初期の不安、誰にも言えない苦しみの相談先",
+    id: "voice",
+    label: "子どもへの声かけを考えたい",
+    description: "相談・情報整理を中心に探します",
+    priorityNeed: "stage1_anonymous",
   },
   {
-    value: "stage2_places",
-    title: "🏫 子どもの居場所・進路・学び場を探したい",
-    description: "教育支援センター、フリースクール、オンライン",
+    id: "organize",
+    label: "今の状況を整理したい",
+    description: "相談・情報整理を中心に探します",
+    priorityNeed: "stage1_anonymous",
   },
   {
-    value: "respite",
-    title: "☕ 母親が一人の時間を持てる静かな場所",
-    description: "子どもと離れ、無料Wi-Fiや電源が使える公共空間",
+    id: "learn",
+    label: "不登校について知りたい",
+    description: "相談・情報整理を中心に探します",
+    priorityNeed: "stage1_anonymous",
   },
   {
-    value: "family_peer",
-    title: "👥 親の会・当事者交流 / きょうだい児の居場所",
-    description: "同じ悩みを話せる場、下の子の放課後サポート",
+    id: "school_discussion",
+    label: "学校との話し合い方を考えたい",
+    description: "相談・情報整理を中心に探します",
+    priorityNeed: "stage1_anonymous",
+  },
+  {
+    id: "find_support",
+    label: "利用できる支援を探したい",
+    description: "居場所・学び・進路支援を中心に探します",
+    priorityNeed: "stage2_places",
+  },
+  {
+    id: "future",
+    label: "今後の進路を考えたい",
+    description: "居場所・学び・進路支援を中心に探します",
+    priorityNeed: "stage2_places",
+  },
+  {
+    id: "home",
+    label: "家での過ごし方を考えたい",
+    description: "相談・情報整理を中心に探します",
+    priorityNeed: "stage1_anonymous",
+  },
+  {
+    id: "listen",
+    label: "とにかく話を聞いてほしい",
+    description: "相談できる窓口を中心に探します",
+    priorityNeed: "stage1_anonymous",
+  },
+  {
+    id: "unknown",
+    label: "まだ分からない",
+    description: "希望を限定せずに探します",
+    priorityNeed: "all",
+  },
+  {
+    id: "other",
+    label: "その他",
+    description: "希望を限定せずに探します",
+    priorityNeed: "all",
+  },
+  {
+    id: "prefer_not",
+    label: "答えたくない",
+    description: "希望を限定せずに探します",
+    priorityNeed: "all",
+    exclusive: true,
   },
 ];
 
@@ -219,9 +281,25 @@ const intakeQuestions: IntakeQuestion[] = [
       { value: "prefer_not", label: "答えたくない", exclusive: true },
     ],
   },
+  {
+    id: "support_focus",
+    number: "Q6",
+    title: "どんなサポートがあると助かりますか？",
+    prompt: "今、どんなことを一緒に考えられると助かりそうですか？",
+    selection: "single",
+    options: supportFocusOptions.map((option) => ({
+      value: option.id,
+      label: option.label,
+      exclusive: option.exclusive,
+    })),
+  },
 ];
 
-function IntakeQuestionnaire() {
+function IntakeQuestionnaire({
+  onSupportFocusChange,
+}: {
+  onSupportFocusChange: (focus: SupportFocus) => void;
+}) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [customCallName, setCustomCallName] = useState("");
@@ -230,32 +308,27 @@ function IntakeQuestionnaire() {
 
   function toggleAnswer(option: IntakeQuestion["options"][number]) {
     if (!question) return;
-    setAnswers((current) => {
-      const selected = current[question.id] ?? [];
-      if (question.selection === "single") {
-        return {
-          ...current,
-          [question.id]: selected.includes(option.value) ? [] : [option.value],
-        };
-      }
-      if (option.exclusive) {
-        return {
-          ...current,
-          [question.id]: selected.includes(option.value) ? [] : [option.value],
-        };
-      }
+    const selected = answers[question.id] ?? [];
+    let nextSelected: string[];
+    if (question.selection === "single" || option.exclusive) {
+      nextSelected = selected.includes(option.value) ? [] : [option.value];
+    } else {
       const withoutExclusive = selected.filter((value) =>
         question.options.every(
           (candidate) => candidate.value !== value || !candidate.exclusive,
         ),
       );
-      return {
-        ...current,
-        [question.id]: withoutExclusive.includes(option.value)
-          ? withoutExclusive.filter((value) => value !== option.value)
-          : [...withoutExclusive, option.value],
-      };
-    });
+      nextSelected = withoutExclusive.includes(option.value)
+        ? withoutExclusive.filter((value) => value !== option.value)
+        : [...withoutExclusive, option.value];
+    }
+    setAnswers((current) => ({
+      ...current,
+      [question.id]: nextSelected,
+    }));
+    if (question.id === "support_focus" && nextSelected.length > 0) {
+      onSupportFocusChange(option.value as SupportFocus);
+    }
   }
 
   const answeredCount = intakeQuestions.filter(
@@ -270,7 +343,7 @@ function IntakeQuestionnaire() {
           <p className="intake-kicker">相談の入口</p>
           <h2>回答ありがとうございます</h2>
           <p>
-            6問中{answeredCount}問に回答しました。答えなかった質問があっても問題ありません。
+            {intakeQuestions.length}問中{answeredCount}問に回答しました。答えなかった質問があっても問題ありません。
             回答内容は保存・送信されず、現在はこの画面内での整理にだけ使用します。
           </p>
           <div className="intake-complete-actions">
@@ -462,6 +535,18 @@ export default function ConsultationApp() {
   const [parseNotice, setParseNotice] = useState("");
   const [isParsing, setIsParsing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [supportFocus, setSupportFocus] = useState<SupportFocus>("find_support");
+
+  function applySupportFocus(focus: SupportFocus) {
+    const option = supportFocusOptions.find((item) => item.id === focus);
+    if (!option) return;
+    setSupportFocus(focus);
+    setConditions((current) => ({
+      ...current,
+      priority_need: option.priorityNeed,
+    }));
+    setResults(null);
+  }
 
   async function handleParse() {
     if (!naturalText.trim()) {
@@ -607,7 +692,7 @@ export default function ConsultationApp() {
           <span className="demo-badge">登録済みURLの情報をAIで整理 · 内容は要確認</span>
         </section>
 
-        <IntakeQuestionnaire />
+        <IntakeQuestionnaire onSupportFocusChange={applySupportFocus} />
 
         <section
           className="workspace"
@@ -766,23 +851,20 @@ export default function ConsultationApp() {
 
             <div className="field-group">
               <span className="field-label">いま一番求めていること</span>
+              <span className="field-hint">
+                選んだ内容を、近い支援カテゴリへ整理して検索します。
+              </span>
               <div className="need-choice-grid">
-                {priorityNeedOptions.map((option) => (
+                {supportFocusOptions.map((option) => (
                   <button
                     className="need-choice-button"
-                    data-active={conditions.priority_need === option.value}
-                    key={option.value}
+                    data-active={supportFocus === option.id}
+                    key={option.id}
                     type="button"
-                    aria-pressed={conditions.priority_need === option.value}
-                    onClick={() => {
-                      setConditions((current) => ({
-                        ...current,
-                        priority_need: option.value,
-                      }));
-                      setResults(null);
-                    }}
+                    aria-pressed={supportFocus === option.id}
+                    onClick={() => applySupportFocus(option.id)}
                   >
-                    <strong>{option.title}</strong>
+                    <strong>{option.label}</strong>
                     <span>{option.description}</span>
                   </button>
                 ))}

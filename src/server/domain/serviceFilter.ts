@@ -42,7 +42,12 @@ function resourceMatches(
   if (conditions.household_status === "subsidy" && !resource.subsidy_eligible) {
     return false;
   }
-  if (!resource.supported_needs.includes(conditions.priority_need)) return false;
+  if (
+    conditions.priority_need !== "all" &&
+    !resource.supported_needs.includes(conditions.priority_need)
+  ) {
+    return false;
+  }
   if (!conditions.preferred_times.some((time) => resource.opening_times.includes(time))) {
     return false;
   }
@@ -125,7 +130,10 @@ function buildConfirmedMatchReasons(
     reasons.push("助成金対象として登録されています");
     substantiveMatches += 1;
   }
-  if (resource.supported_needs.includes(conditions.priority_need)) {
+  if (
+    conditions.priority_need !== "all" &&
+    resource.supported_needs.includes(conditions.priority_need)
+  ) {
     reasons.push("希望する支援内容に対応しています");
     substantiveMatches += 1;
   }
