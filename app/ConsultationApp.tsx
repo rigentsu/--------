@@ -711,7 +711,6 @@ export default function ConsultationApp() {
                 <h2>条件を設定する</h2>
                 <p>入力した条件だけを使って、利用できそうな支援を検索します。</p>
               </div>
-              <span className="step-number">01</span>
             </div>
 
             <div className="field-group">

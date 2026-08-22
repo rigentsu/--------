@@ -441,19 +441,6 @@ button {
   line-height: 1.6;
 }
 
-.step-number {
-  display: grid;
-  flex: 0 0 auto;
-  width: 33px;
-  height: 33px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--yellow);
-  color: #6f531d;
-  font-size: 13px;
-  font-weight: 800;
-}
-
 .field-group {
   display: grid;
   gap: 9px;
