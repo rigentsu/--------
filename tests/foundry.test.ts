@@ -99,6 +99,18 @@ test("Project endpointにはResponses API形式でinstructionsとinputを送る"
     assert.equal(capturedBody.model, "gpt-5-mini");
     assert.equal(capturedBody.input, "子どもの居場所を探したい");
     assert.equal(typeof capturedBody.instructions, "string");
+    const instructions = String(capturedBody.instructions);
+    assert.match(
+      instructions,
+      /利用者の安全、尊厳、プライバシーを最優先する/,
+    );
+    assert.match(instructions, /自殺・自傷/);
+    assert.match(instructions, /登校を一方的に促さない/);
+    assert.match(instructions, /conditionsを空にし/);
+    assert.ok(
+      instructions.indexOf("【基本原則】") <
+        instructions.indexOf("【この機能での役割】"),
+    );
     assert.equal("temperature" in capturedBody, false);
     assert.equal("reasoning" in capturedBody, false);
     assert.deepEqual(capturedBody.text, { format: { type: "json_object" } });
