@@ -9,6 +9,22 @@ import type {
 import type { ValidatedConditions } from "./schemas";
 import { calculateMonthlyCost } from "./costCalculator";
 
+// A result outside this radius is not a realistic local support option for a
+// family who supplied a postal code. Keep it out of both matches and review
+// candidates instead of merely sorting it to the bottom.
+export const MAX_RECOMMENDED_DISTANCE_KM = 50;
+
+function householdStatusMatches(
+  resource: SupportResource,
+  conditions: ValidatedConditions,
+) {
+  if (conditions.household_status === "all") return true;
+  return (
+    resource.eligible_household_statuses.includes("all") ||
+    resource.eligible_household_statuses.includes(conditions.household_status)
+  );
+}
+
 function resourceMatches(
   resource: SupportResource,
   conditions: ValidatedConditions,
@@ -22,9 +38,7 @@ function resourceMatches(
 
   if (resource.municipality !== conditions.municipality) return false;
   if (!resource.eligible_grades.includes(conditions.grade)) return false;
-  if (!resource.eligible_household_statuses.includes(conditions.household_status)) {
-    return false;
-  }
+  if (!householdStatusMatches(resource, conditions)) return false;
   if (conditions.household_status === "subsidy" && !resource.subsidy_eligible) {
     return false;
   }
@@ -77,36 +91,65 @@ function buildVerificationPoints(resource: SupportResource) {
   ];
 }
 
-function buildReviewReasons(resource: SupportResource, origin: GeoPoint | null) {
+function buildConfirmedMatchReasons(
+  resource: SupportResource,
+  conditions: ValidatedConditions,
+  cost: FilteredResource["cost"] | null,
+  distanceKm: number | null,
+) {
   const reasons: string[] = [];
-  if (!resource.municipality) reasons.push("地域が情報源に明記されていません");
-  if (resource.eligible_grades.length === 0) {
-    reasons.push("対象学年が情報源に明記されていません");
+  let substantiveMatches = 0;
+
+  if (resource.municipality === conditions.municipality) {
+    reasons.push(`地域が一致：${resource.municipality}`);
   }
-  if (resource.eligible_household_statuses.length === 0) {
-    reasons.push("世帯条件が情報源に明記されていません");
+  if (distanceKm !== null) {
+    reasons.push(`入力した郵便番号から約${distanceKm}km`);
+    substantiveMatches += 1;
   }
-  if (resource.opening_times.length === 0) {
-    reasons.push("利用時間帯が情報源に明記されていません");
+  if (resource.eligible_grades.includes(conditions.grade)) {
+    reasons.push("対象学年が一致しています");
+    substantiveMatches += 1;
   }
-  if (resource.monthly_fee === null) {
-    reasons.push("月額費用が情報源に明記されていません");
-  }
-  if (resource.supported_needs.length === 0) {
-    reasons.push("支援内容が情報源に明記されていません");
-  }
-  if (resource.can_pickup === null) {
-    reasons.push("送迎条件は未確認です");
-  }
-  if (origin && !resource.address) {
-    reasons.push("施設住所が情報源に明記されていません");
-  } else if (
-    origin &&
-    (resource.latitude === null || resource.longitude === null)
+  if (
+    conditions.household_status !== "all" &&
+    householdStatusMatches(resource, conditions)
   ) {
-    reasons.push("施設住所から距離を計算できませんでした");
+    reasons.push("希望する世帯条件に対応しています");
+    substantiveMatches += 1;
   }
-  return reasons;
+  if (
+    conditions.household_status === "subsidy" &&
+    resource.subsidy_eligible
+  ) {
+    reasons.push("助成金対象として登録されています");
+    substantiveMatches += 1;
+  }
+  if (resource.supported_needs.includes(conditions.priority_need)) {
+    reasons.push("希望する支援内容に対応しています");
+    substantiveMatches += 1;
+  }
+  if (
+    conditions.preferred_times.some((time) =>
+      resource.opening_times.includes(time),
+    )
+  ) {
+    reasons.push("希望する利用時間帯と一致しています");
+    substantiveMatches += 1;
+  }
+  if (
+    (conditions.can_pickup === "yes" && resource.can_pickup === true) ||
+    (conditions.can_pickup === "no" && resource.can_pickup === false)
+  ) {
+    reasons.push("希望する送迎条件と一致しています");
+    substantiveMatches += 1;
+  }
+  if (cost && cost.estimated_self_pay <= conditions.monthly_budget) {
+    reasons.push("見込み自己負担額が月額予算内です");
+    substantiveMatches += 1;
+  }
+
+  return { reasons, substantiveMatches };
 }
 
 function calculateDistanceKm(
@@ -147,7 +190,6 @@ function sortByDistance<T extends { distance_km: number | null }>(resources: T[]
 function knownFieldsAreCompatible(
   resource: SupportResource,
   conditions: ValidatedConditions,
-  cost: FilteredResource["cost"],
 ) {
   if (!isApprovedSourceUrl(resource.source_id, resource.source_url)) return false;
   if (resource.municipality && resource.municipality !== conditions.municipality) {
@@ -156,43 +198,6 @@ function knownFieldsAreCompatible(
   if (
     resource.eligible_grades.length > 0 &&
     !resource.eligible_grades.includes(conditions.grade)
-  ) {
-    return false;
-  }
-  if (
-    resource.eligible_household_statuses.length > 0 &&
-    !resource.eligible_household_statuses.includes(conditions.household_status)
-  ) {
-    return false;
-  }
-  if (
-    conditions.household_status === "subsidy" &&
-    resource.eligible_household_statuses.length > 0 &&
-    !resource.subsidy_eligible
-  ) {
-    return false;
-  }
-  if (
-    resource.supported_needs.length > 0 &&
-    !resource.supported_needs.includes(conditions.priority_need)
-  ) {
-    return false;
-  }
-  if (
-    resource.opening_times.length > 0 &&
-    !conditions.preferred_times.some((time) => resource.opening_times.includes(time))
-  ) {
-    return false;
-  }
-  if (conditions.can_pickup === "yes" && resource.can_pickup === false) {
-    return false;
-  }
-  if (conditions.can_pickup === "no" && resource.can_pickup === true) {
-    return false;
-  }
-  if (
-    resource.monthly_fee !== null &&
-    cost.estimated_self_pay > conditions.monthly_budget
   ) {
     return false;
   }
@@ -208,42 +213,52 @@ export function filterSupportResources(
   const reviewCandidates: ReviewResource[] = [];
 
   for (const resource of sourceResources) {
-    const reviewReasons = buildReviewReasons(resource, origin);
-    const cost =
-      resource.monthly_fee === null
-        ? null
-        : calculateMonthlyCost(resource.monthly_fee, conditions.annual_income);
+    const distanceKm = calculateDistanceKm(origin, resource);
 
     if (
-      !knownFieldsAreCompatible(
-        resource,
-        conditions,
-        cost ?? calculateMonthlyCost(0, conditions.annual_income),
-      )
+      origin &&
+      distanceKm !== null &&
+      distanceKm > MAX_RECOMMENDED_DISTANCE_KM
     ) {
       continue;
     }
 
-    if (reviewReasons.length > 0) {
+    const cost =
+      resource.monthly_fee === null
+        ? null
+        : calculateMonthlyCost(resource.monthly_fee, conditions.annual_income);
+    const confirmedMatches = buildConfirmedMatchReasons(
+      resource,
+      conditions,
+      cost,
+      distanceKm,
+    );
+
+    if (!knownFieldsAreCompatible(resource, conditions)) {
+      continue;
+    }
+
+    if (
+      (!cost || !resourceMatches(resource, conditions, cost)) &&
+      confirmedMatches.substantiveMatches > 0
+    ) {
       reviewCandidates.push({
         ...resource,
-        distance_km: calculateDistanceKm(origin, resource),
-        review_reasons: reviewReasons,
+        distance_km: distanceKm,
+        review_reasons: confirmedMatches.reasons,
       });
       continue;
     }
 
-    if (cost === null) continue;
+    if (!cost || !resourceMatches(resource, conditions, cost)) continue;
 
-    if (resourceMatches(resource, conditions, cost)) {
-      matches.push({
-        ...resource,
-        distance_km: calculateDistanceKm(origin, resource),
-        reasons: buildReasons(resource, conditions, cost),
-        verification_points: buildVerificationPoints(resource),
-        cost,
-      });
-    }
+    matches.push({
+      ...resource,
+      distance_km: distanceKm,
+      reasons: buildReasons(resource, conditions, cost),
+      verification_points: buildVerificationPoints(resource),
+      cost,
+    });
   }
 
   sortByDistance(matches);

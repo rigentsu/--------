@@ -81,3 +81,31 @@ test("同じ施設住所は一度だけジオコーディングする", async ()
     globalThis.fetch = originalFetch;
   }
 });
+
+test("住所がない施設を機関名だけで推測ジオコーディングしない", async () => {
+  const originalFetch = globalThis.fetch;
+  let requestCount = 0;
+  globalThis.fetch = (async () => {
+    requestCount += 1;
+    return Response.json({ status: "ZERO_RESULTS", results: [] });
+  }) as typeof fetch;
+
+  try {
+    const resource = {
+      ...rawResources[0],
+      id: "missing-address",
+      address: null,
+      latitude: null,
+      longitude: null,
+    } as SupportResource;
+    const [located] = await geocodeSupportResources([resource], {
+      GOOGLE_MAPS_API_KEY: "test-only-key",
+    });
+
+    assert.equal(requestCount, 0);
+    assert.equal(located?.latitude, null);
+    assert.equal(located?.longitude, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

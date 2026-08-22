@@ -152,19 +152,15 @@ export async function geocodeSupportResources(
         return resource;
       }
       const address = resource.address?.trim();
-      const fallbackQuery = [resource.municipality, resource.name]
-        .filter(
-          (value) =>
-            value && value !== "情報源から抽出した支援情報",
-        )
-        .join(" ");
-      const query = address || fallbackQuery;
-      if (!query) return resource;
+      // Never guess a facility coordinate from its name. Duplicate institution
+      // names across Japan can resolve hundreds of kilometres away. A missing
+      // public address must remain "distance unknown" and be reviewed.
+      if (!address) return resource;
 
-      let locationRequest = cache.get(query);
+      let locationRequest = cache.get(address);
       if (!locationRequest) {
-        locationRequest = geocodeAddress(query, env);
-        cache.set(query, locationRequest);
+        locationRequest = geocodeAddress(address, env);
+        cache.set(address, locationRequest);
       }
       const location = await locationRequest;
       return {

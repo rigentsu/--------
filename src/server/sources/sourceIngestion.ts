@@ -4,10 +4,13 @@ import {
 } from "../../config/sourceRegistry";
 import {
   callFoundryForSourcePage,
+  callFoundryForDuplicateGroups,
   type FoundryEnv,
   type FoundrySourcePage,
 } from "../ai/foundryClient";
 import type { SupportResource } from "../../shared/types";
+import { OFFICIAL_SUPPORT_RESOURCES } from "../../data/officialSupportResources";
+import { selectUniqueResources } from "../domain/resourceDeduplication";
 
 const MAX_SOURCE_HTML_CHARACTERS = 120_000;
 const MAX_SOURCE_CHARACTERS = 12_000;
@@ -176,47 +179,59 @@ function toSupportResource(
 export async function loadResourcesFromApprovedSources(
   env: FoundryEnv,
 ): Promise<SupportResource[]> {
-  if (APPROVED_SOURCE_PAGES.length === 0) {
+  // Search must stay deterministic and fast during the public demo. The
+  // manually verified snapshot is the default source of truth; live page
+  // extraction remains an explicit research mode for refreshing that snapshot.
+  if (env.ENABLE_LIVE_SOURCE_INGESTION !== "true") {
+    return [...OFFICIAL_SUPPORT_RESOURCES];
+  }
+
+  const searchPages = APPROVED_SOURCE_PAGES.filter(
+    (page) => page.search_enabled !== false,
+  );
+  if (searchPages.length === 0) {
     throw new SourceIngestionError("登録済みの情報源URLがありません。");
   }
 
   const fetchedPages = await Promise.allSettled(
-    APPROVED_SOURCE_PAGES.map((page) => fetchApprovedPage(page)),
-  );
-  const fetchErrors = fetchedPages.flatMap((result) =>
-    result.status === "rejected" ? [errorMessage(result.reason)] : [],
+    searchPages.map((page) => fetchApprovedPage(page)),
   );
   const pages = fetchedPages.flatMap((result) =>
     result.status === "fulfilled" ? [result.value] : [],
   );
 
-  if (pages.length === 0) {
-    throw new SourceIngestionError(
-      `登録済みURLから情報を取得できませんでした。${formatReasons(fetchErrors)}`,
-    );
-  }
+  if (pages.length === 0) return [...OFFICIAL_SUPPORT_RESOURCES];
 
-  const extractedPages = await Promise.allSettled(
-    pages.map((page) => callFoundryForSourcePage(env, page)),
-  );
-  const extractionErrors = extractedPages.flatMap((result) =>
-    result.status === "rejected" ? [errorMessage(result.reason)] : [],
-  );
   const verifiedAt = `AI抽出日：${new Date().toISOString().slice(0, 10)}`;
-  const resources: SupportResource[] = [];
+  const resources: SupportResource[] = [...OFFICIAL_SUPPORT_RESOURCES];
+  const extractionErrors: string[] = [];
 
-  extractedPages.forEach((result, pageIndex) => {
-    if (result.status !== "fulfilled") return;
-    result.value.forEach((item, itemIndex) => {
-      const resource = toSupportResource(
-        pages[pageIndex],
-        item,
-        itemIndex,
-        verifiedAt,
-      );
-      resources.push(resource);
-    });
-  });
+  // Foundry deployments often have low per-second request limits. Extract one
+  // source at a time so a burst does not randomly drop the most useful local
+  // page while still allowing a failed page to be skipped safely.
+  for (const page of pages) {
+    try {
+      const extracted = await callFoundryForSourcePage(env, page);
+      extracted.forEach((item, itemIndex) => {
+        const candidate = toSupportResource(page, item, itemIndex, verifiedAt);
+        const canonicalName = candidate.name
+          .replace(/[（(].*?[）)]/g, "")
+          .replace(/\s/g, "");
+        const isDuplicate = resources.some(
+          (resource) =>
+            resource.name
+              .replace(/[（(].*?[）)]/g, "")
+              .replace(/\s/g, "") === canonicalName ||
+            (Boolean(candidate.address) &&
+              resource.address === candidate.address &&
+              resource.source_url === candidate.source_url),
+        );
+        if (!isDuplicate) resources.push(candidate);
+      });
+    } catch (error) {
+      extractionErrors.push(errorMessage(error));
+    }
+  }
 
   if (resources.length === 0) {
     throw new SourceIngestionError(
@@ -225,7 +240,16 @@ export async function loadResourcesFromApprovedSources(
     );
   }
 
-  return resources;
+  if (resources.length < 2) return resources;
+
+  try {
+    const duplicateDecision = await callFoundryForDuplicateGroups(env, resources);
+    return selectUniqueResources(resources, duplicateDecision.duplicate_groups);
+  } catch {
+    // Duplicate detection must never make the whole search fail. Existing
+    // deterministic exact-name/address checks remain the safe fallback.
+    return resources;
+  }
 }
 
 function errorMessage(reason: unknown) {

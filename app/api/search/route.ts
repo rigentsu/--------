@@ -41,7 +41,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const origin = input.data.conditions.postal_code
+    const canUseGeocoding = Boolean(workerEnv.GOOGLE_MAPS_API_KEY?.trim());
+    const origin = input.data.conditions.postal_code && canUseGeocoding
       ? await geocodePostalCode(input.data.conditions.postal_code, workerEnv)
       : null;
     const resources = await loadResourcesFromApprovedSources(workerEnv);

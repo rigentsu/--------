@@ -28,8 +28,10 @@ const initialConditions: ConsultationConditions = {
   can_pickup: "unknown",
   monthly_budget: 30000,
   annual_income: 0,
-  priority_need: "stage1_anonymous",
+  priority_need: "stage2_places",
 };
+
+const CONSULT_TIMEOUT_MS = 10_000;
 
 const gradeOptions: Array<{ value: Grade; label: string }> = [
   { value: "elementary_1", label: "小学1年生" },
@@ -120,50 +122,45 @@ function ReviewCandidateCard({ resource }: { resource: ReviewResource }) {
         >
           {resource.category === "public" ? "公営の情報" : "民間の情報"}
         </span>
-        <span className="status-badge">AI抽出 · 情報不足・要確認</span>
+        <span className="status-badge">
+          {resource.data_status === "manually_verified"
+            ? "公式確認済み"
+            : resource.data_status === "ai_extracted_unverified"
+              ? "AI抽出情報"
+              : "要確認データ"}
+        </span>
         {resource.distance_km !== null ? (
           <span className="distance-badge">{formatDistance(resource.distance_km)}</span>
         ) : null}
       </div>
       <div className="candidate-title-row">
         <h3>{resource.name}</h3>
-        <span className="candidate-type">
-          {resource.can_pickup === true ? "送迎ありの登録" : "送迎は未確認"}
-        </span>
+        {resource.can_pickup !== null ? (
+          <span className="candidate-type">
+            {resource.can_pickup ? "送迎あり" : "送迎なし"}
+          </span>
+        ) : null}
       </div>
       <p className="candidate-note">
-        条件が不足しているため一致候補には含めていません。登録済みURLの情報を確認できます。
+        入力条件との一致が確認できた情報を含む比較候補です。
       </p>
 
-      <ul className="reason-list" aria-label="確認が必要な理由">
+      <ul className="reason-list" aria-label="入力条件と一致する点">
         {resource.review_reasons.map((reason) => (
           <li key={reason}>{reason}</li>
         ))}
       </ul>
 
-      <ul className="review-detail-list" aria-label="抽出された情報">
-        <li>地域：{resource.municipality || "未確認"}</li>
-        <li>施設住所：{resource.address || "未確認（機関名または地域から概算）"}</li>
-        <li>
-          対象学年：
-          {resource.eligible_grades.length > 0
-            ? resource.eligible_grades.map(gradeLabel).join(" / ")
-            : "未確認"}
-        </li>
-        <li>
-          利用時間：
-          {resource.opening_times.length > 0
-            ? resource.opening_times.map(timeLabel).join(" / ")
-            : "未確認"}
-        </li>
-        <li>
-          月額費用：
-          {resource.monthly_fee === null
-            ? "未確認"
-            : formatYen(resource.monthly_fee)}
-        </li>
-        <li>郵便番号からの距離：{formatDistance(resource.distance_km)}</li>
-      </ul>
+      {resource.address ? <p className="candidate-note">所在地：{resource.address}</p> : null}
+
+      {resource.notes.length > 0 ? (
+        <ul className="verify-list" aria-label="利用前に確認する内容">
+          {resource.notes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+          <li>料金、空き状況、利用条件は初回連絡時に確認してください。</li>
+        </ul>
+      ) : null}
 
       <div className="source-row">
         <div className="source-meta">
@@ -203,11 +200,18 @@ export default function ConsultationApp() {
     setIsParsing(true);
     setError("");
 
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      CONSULT_TIMEOUT_MS,
+    );
+
     try {
       const response = await fetch("/api/consult", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: naturalText }),
+        signal: controller.signal,
       });
       const responseBody: unknown = await response.json().catch(() => null);
       const parsedResponse = ConsultApiResponseSchema.safeParse(responseBody);
@@ -229,6 +233,7 @@ export default function ConsultationApp() {
     } catch {
       // The deterministic local parser below keeps the prototype usable offline.
     } finally {
+      window.clearTimeout(timeout);
       setIsParsing(false);
     }
 
@@ -243,7 +248,7 @@ export default function ConsultationApp() {
     setResults(null);
     setError("");
     setParseNotice(
-      "Microsoft Foundryを利用できないため、ローカル解析で反映しました。内容を確認してから検索してください。",
+      "AI解析を利用できなかったため、簡易解析で反映しました。内容を確認してから検索してください。",
     );
   }
 
@@ -317,7 +322,7 @@ export default function ConsultationApp() {
 
       <main id="top">
         <section className="hero">
-          <p className="eyebrow">不登校支援 · 試作 v1</p>
+          <p className="eyebrow">不登校支援 · 葛飾区 実証版</p>
           <h1>
             まずは現実的な条件を整理して、
             <br />
@@ -529,7 +534,7 @@ export default function ConsultationApp() {
               </label>
 
               <label className="field-group" htmlFor="annual-income">
-                <span className="field-label">年収（任意）</span>
+                <span className="field-label">年収（開発デモ計算・任意）</span>
                 <div className="currency-input">
                   <input
                     id="annual-income"
@@ -548,6 +553,9 @@ export default function ConsultationApp() {
                   />
                   <span>円</span>
                 </div>
+                <span className="field-hint">
+                  実在制度の資格判定には使用しません。未入力は0円のままで検索できます。
+                </span>
               </label>
             </div>
 
@@ -566,7 +574,7 @@ export default function ConsultationApp() {
                 <div>
                   <span className="field-label">補足を入力する（任意）</span>
                   <p className="field-hint">
-                    ほかに伝えておきたいことがある場合だけ使えます。環境変数の設定後はMicrosoft Foundryで読み取り、未設定時はローカル解析を使用します。
+                    ほかに伝えておきたいことがある場合だけ使えます。AI解析を利用できない場合は簡易解析へ切り替わります。
                   </p>
                 </div>
                 <span className="chat-mark" aria-hidden="true">＋</span>
@@ -669,9 +677,11 @@ export default function ConsultationApp() {
                           {resource.category === "public" ? "公営の選択肢" : "民間の選択肢"}
                         </span>
                         <span className="status-badge">
-                          {resource.data_status === "ai_extracted_unverified"
-                            ? "AI抽出 · 要確認"
-                            : "デモデータ · 要確認"}
+                          {resource.data_status === "manually_verified"
+                            ? "公式確認済み"
+                            : resource.data_status === "ai_extracted_unverified"
+                              ? "AI抽出情報"
+                              : "要確認データ"}
                         </span>
                         {resource.distance_km !== null ? (
                           <span className="distance-badge">{formatDistance(resource.distance_km)}</span>
@@ -679,17 +689,17 @@ export default function ConsultationApp() {
                       </div>
                       <div className="candidate-title-row">
                         <h3>{resource.name}</h3>
-                        <span className="candidate-type">
-                          {resource.can_pickup === true
-                            ? "送迎ありの登録"
-                            : "送迎は未確認"}
-                        </span>
+                        {resource.can_pickup !== null ? (
+                          <span className="candidate-type">
+                            {resource.can_pickup ? "送迎あり" : "送迎なし"}
+                          </span>
+                        ) : null}
                       </div>
                       <p className="candidate-note">
                         現在の入力条件で残った候補です。必ず利用できることを示すものではありません。
                       </p>
 
-                      <ul className="reason-list" aria-label="保留理由">
+                      <ul className="reason-list" aria-label="候補として残った理由">
                         {resource.reasons.map((reason) => (
                           <li key={reason}>{reason}</li>
                         ))}
@@ -717,7 +727,7 @@ export default function ConsultationApp() {
                         </p>
                       </div>
 
-                      <ul className="verify-list" aria-label="確認が必要な内容">
+                      <ul className="verify-list" aria-label="利用前に確認する内容">
                         {resource.verification_points.map((point) => (
                           <li key={point}>{point}</li>
                         ))}
@@ -744,11 +754,11 @@ export default function ConsultationApp() {
                 ) : null}
 
                 {results.review_candidates.length > 0 ? (
-                  <section className="review-section" aria-label="情報不足の候補">
+                  <section className="review-section" aria-label="比較候補">
                     <div className="results-summary review-summary">
-                      条件が不足しているため一致判定はできませんが、登録済みURLから{" "}
+                      入力条件との一致が確認できた比較候補が{" "}
                       <strong>{results.review_candidates.length}件</strong>
-                      の情報を抽出しました。リンク先で確認できます。
+                      あります。料金などの未確認項目は、リンク先または窓口で確認してください。
                     </div>
                     <div className="candidate-list">
                       {results.review_candidates.map((resource) => (
@@ -768,7 +778,7 @@ export default function ConsultationApp() {
       </main>
 
       <footer className="site-footer">
-        よりそいナビ 試作 v1 · 支援選択ツール · 長期的な個人記録は保存しません
+        よりそいナビ 葛飾区 実証版 · 支援選択ツール · 長期的な個人記録は保存しません
       </footer>
     </div>
   );

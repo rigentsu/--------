@@ -6,6 +6,8 @@ import { parseNaturalLanguage } from "../src/server/domain/naturalLanguage";
 import { filterSupportResources } from "../src/server/domain/serviceFilter";
 import { ConsultationConditionsSchema } from "../src/server/domain/schemas";
 import type { SupportResource } from "../src/shared/types";
+import { OFFICIAL_SUPPORT_RESOURCES } from "../src/data/officialSupportResources";
+import { selectUniqueResources } from "../src/server/domain/resourceDeduplication";
 
 test("開発デモの補助計算は要求書の仮計算式に従う", () => {
   assert.deepEqual(calculatePrototypeSubsidy(5_000_000), {
@@ -123,15 +125,35 @@ test("ホワイトリスト内の公営・民間の候補を複数残す", () =>
       eligible_household_statuses: [],
       opening_times: [],
       monthly_fee: null,
+      supported_needs: [],
+      can_pickup: null,
     },
   ] as SupportResource[]);
 
   assert.equal(partialResult.matches.length, 0);
-  assert.equal(partialResult.review_candidates.length, 1);
-  assert.ok(partialResult.review_candidates[0]?.source_url);
+  assert.equal(partialResult.review_candidates.length, 0);
+  assert.equal(partialResult.excluded_count, 1);
+
+  const usefulPartialResult = filterSupportResources(conditions, [
+    {
+      ...rawResources[0],
+      id: "grade-matched-partial-resource",
+      monthly_fee: null,
+      opening_times: [],
+      supported_needs: [],
+      can_pickup: null,
+    },
+  ] as SupportResource[]);
+
+  assert.equal(usefulPartialResult.review_candidates.length, 1);
   assert.ok(
-    partialResult.review_candidates[0]?.review_reasons.includes(
-      "月額費用が情報源に明記されていません",
+    usefulPartialResult.review_candidates[0]?.review_reasons.includes(
+      "対象学年が一致しています",
+    ),
+  );
+  assert.ok(
+    usefulPartialResult.review_candidates[0]?.review_reasons.every(
+      (reason) => !reason.includes("未確認") && !reason.includes("一致していません"),
     ),
   );
 
@@ -187,4 +209,66 @@ test("ホワイトリスト内の公営・民間の候補を複数残す", () =>
     ["near-resource", "far-resource"],
   );
   assert.equal(distanceResult.matches[0]?.distance_km, 0);
+});
+
+test("郵便番号から50kmを超える候補は検索結果にも要確認候補にも出さない", () => {
+  const conditions = ConsultationConditionsSchema.parse({
+    municipality: "新宿区",
+    postal_code: "1250061",
+    grade: "junior_high_2",
+    household_status: "all",
+    preferred_times: ["weekday_afternoon"],
+    can_pickup: "unknown",
+    monthly_budget: 30_000,
+    annual_income: 0,
+    priority_need: "stage2_places",
+  });
+  const farResource = {
+    ...rawResources[0],
+    id: "far-away-resource",
+    address: "大阪府大阪市",
+    latitude: 34.6937,
+    longitude: 135.5023,
+  } as SupportResource;
+
+  const result = filterSupportResources(
+    conditions,
+    [farResource],
+    { latitude: 35.75, longitude: 139.85 },
+  );
+
+  assert.equal(result.matches.length, 0);
+  assert.equal(result.review_candidates.length, 0);
+  assert.equal(result.excluded_count, 1);
+});
+
+test("葛飾区の公式な基礎候補には公開住所と情報源がある", () => {
+  assert.ok(OFFICIAL_SUPPORT_RESOURCES.length >= 2);
+  assert.ok(
+    OFFICIAL_SUPPORT_RESOURCES.every(
+      (resource) =>
+        resource.municipality === "葛飾区" &&
+        resource.address?.startsWith("東京都葛飾区") &&
+        resource.data_status === "manually_verified",
+    ),
+  );
+});
+
+test("モデルが同一内容と判断した候補は情報が最も完全な1件だけ残す", () => {
+  const official = OFFICIAL_SUPPORT_RESOURCES[0] as SupportResource;
+  const duplicate = {
+    ...official,
+    id: "ai-duplicate",
+    name: "ふれあいスクール明石（総合教育センター）",
+    address: null,
+    eligible_grades: [],
+    data_status: "ai_extracted_unverified",
+  } as SupportResource;
+
+  const result = selectUniqueResources(
+    [duplicate, official],
+    [[duplicate.id, official.id]],
+  );
+
+  assert.deepEqual(result.map((resource) => resource.id), [official.id]);
 });

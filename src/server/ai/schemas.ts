@@ -318,4 +318,13 @@ export const SourceExtractionOutputSchema = z
   })
   .strip();
 
+export const DuplicateGroupsOutputSchema = z
+  .object({
+    duplicate_groups: z
+      .array(z.array(z.string().trim().min(1)).min(2).max(10))
+      .max(20),
+  })
+  .strip();
+
 export type SourceExtractionResource = z.infer<typeof SourceExtractionResourceSchema>;
+export type DuplicateGroupsOutput = z.infer<typeof DuplicateGroupsOutputSchema>;

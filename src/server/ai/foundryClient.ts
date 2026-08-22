@@ -2,16 +2,20 @@ import {
   FoundryChatCompletionSchema,
   FoundryOutputSchema,
   FoundryResponsesSchema,
+  DuplicateGroupsOutputSchema,
   SourceExtractionOutputSchema,
   type FoundryOutput,
   type SourceExtractionResource,
+  type DuplicateGroupsOutput,
 } from "./schemas";
+import type { SupportResource } from "../../shared/types";
 
 export type FoundryEnv = {
   MS_FOUNDRY_ENDPOINT?: string;
   MS_FOUNDRY_DEPLOYMENT_NAME?: string;
   MS_FOUNDRY_API_VERSION?: string;
   MS_FOUNDRY_API_KEY?: string;
+  ENABLE_LIVE_SOURCE_INGESTION?: string;
 };
 
 export type FoundrySourcePage = {
@@ -440,4 +444,44 @@ export async function callFoundryForSourcePage(
   }
 
   return output.data.resources;
+}
+
+export async function callFoundryForDuplicateGroups(
+  env: FoundryEnv,
+  resources: SupportResource[],
+): Promise<DuplicateGroupsOutput> {
+  const candidates = resources.map((resource) => ({
+    id: resource.id,
+    name: resource.name,
+    municipality: resource.municipality,
+    address: resource.address,
+    source_label: resource.source_label,
+    source_url: resource.source_url,
+    notes: resource.notes.slice(0, 2),
+  }));
+  const prompt = [
+    "以下は支援検索で抽出された候補です。同じ機関の同じ具体的なサービス・相談窓口を別名で重複掲載している候補だけをグループ化してください。",
+    "同じ建物・運営組織であっても、フリースクールと教育相談など利用目的が異なるサービスは別候補です。",
+    "名称が少し違っても、住所、情報源、説明から利用者にとって実質的に同じ内容なら重複です。判断できない場合は重複にしないでください。",
+    "候補の事実を書き換えず、必ず既存idだけを使って次のJSONを返してください。重複がなければ空配列です。",
+    '{"duplicate_groups":[["id-a","id-b"]]}',
+    "候補:",
+    JSON.stringify(candidates),
+  ].join("\n");
+  const content = await requestChatCompletion(
+    env,
+    [
+      {
+        role: "system",
+        content: "あなたは日本語の支援情報の重複判定を慎重に行う専門家です。",
+      },
+      { role: "user", content: prompt },
+    ],
+    2_000,
+  );
+  const output = DuplicateGroupsOutputSchema.safeParse(extractJsonObject(content));
+  if (!output.success) {
+    throw new FoundryResponseError("Microsoft Foundryの重複判定結果を検証できませんでした。");
+  }
+  return output.data;
 }

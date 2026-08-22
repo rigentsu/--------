@@ -1,0 +1,11 @@
+# Microsoft Foundry（補足文のAI解析を使う場合）
+MS_FOUNDRY_ENDPOINT=
+MS_FOUNDRY_DEPLOYMENT_NAME=
+MS_FOUNDRY_API_VERSION=
+MS_FOUNDRY_API_KEY=
+
+# Google Maps（郵便番号からの概算距離を使う場合）
+GOOGLE_MAPS_API_KEY=
+
+# 通常はfalseのままにします。trueは登録URLを実行時にAI抽出する調査用モードです。
+ENABLE_LIVE_SOURCE_INGESTION=false
