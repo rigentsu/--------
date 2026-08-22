@@ -7,7 +7,10 @@ import {
   SearchApiErrorSchema,
 } from "../src/server/domain/schemas";
 import { parseNaturalLanguage } from "../src/server/domain/naturalLanguage";
-import { ConsultApiResponseSchema } from "../src/server/ai/schemas";
+import {
+  ConsultApiResponseSchema,
+  type ConsultationAnswer,
+} from "../src/server/ai/schemas";
 import type {
   ConsultationConditions,
   FilterResult,
@@ -31,7 +34,7 @@ const initialConditions: ConsultationConditions = {
   priority_need: "stage2_places",
 };
 
-const CONSULT_TIMEOUT_MS = 10_000;
+const CONSULT_TIMEOUT_MS = 50_000;
 
 const gradeOptions: Array<{ value: Grade; label: string }> = [
   { value: "elementary_1", label: "小学1年生" },
@@ -297,12 +300,17 @@ const intakeQuestions: IntakeQuestion[] = [
 
 function IntakeQuestionnaire({
   onSupportFocusChange,
+  onConsult,
 }: {
   onSupportFocusChange: (focus: SupportFocus) => void;
+  onConsult: (answers: ConsultationAnswer[]) => Promise<string>;
 }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string[]>>({});
   const [customCallName, setCustomCallName] = useState("");
+  const [assistantMessage, setAssistantMessage] = useState("");
+  const [consultError, setConsultError] = useState("");
+  const [isConsulting, setIsConsulting] = useState(false);
   const isComplete = step >= intakeQuestions.length;
   const question = intakeQuestions[Math.min(step, intakeQuestions.length - 1)];
 
@@ -335,6 +343,41 @@ function IntakeQuestionnaire({
     (item) => (answers[item.id]?.length ?? 0) > 0,
   ).length;
 
+  function consultationAnswers(): ConsultationAnswer[] {
+    return intakeQuestions.flatMap((item) => {
+      const selectedValues = answers[item.id] ?? [];
+      if (selectedValues.length === 0) return [];
+      const labels = selectedValues.flatMap((value) => {
+        const option = item.options.find((candidate) => candidate.value === value);
+        return option ? [option.label] : [];
+      });
+      if (labels.length === 0) return [];
+      return [{ question_id: item.id as ConsultationAnswer["question_id"], question: item.title, answers: labels }];
+    });
+  }
+
+  async function requestAiResponse() {
+    setIsConsulting(true);
+    setConsultError("");
+    try {
+      setAssistantMessage(await onConsult(consultationAnswers()));
+    } catch (error) {
+      setAssistantMessage("");
+      setConsultError(
+        error instanceof Error
+          ? error.message
+          : "AIから応答を取得できませんでした。時間をおいてもう一度お試しください。",
+      );
+    } finally {
+      setIsConsulting(false);
+    }
+  }
+
+  function finishQuestionnaire() {
+    setStep(intakeQuestions.length);
+    void requestAiResponse();
+  }
+
   if (isComplete) {
     return (
       <section className="panel intake-panel intake-complete" aria-label="相談の入口">
@@ -344,10 +387,33 @@ function IntakeQuestionnaire({
           <h2>回答ありがとうございます</h2>
           <p>
             {intakeQuestions.length}問中{answeredCount}問に回答しました。答えなかった質問があっても問題ありません。
-            回答内容は保存・送信されず、現在はこの画面内での整理にだけ使用します。
+            回答内容は保存せず、相談内容を整理するためにAIへ送信します。
           </p>
+          <div className="ai-guidance" aria-live="polite">
+            <p className="ai-guidance-label">AIからのご案内</p>
+            {isConsulting ? (
+              <p>回答内容を整理しています…</p>
+            ) : assistantMessage ? (
+              <p className="ai-guidance-message">{assistantMessage}</p>
+            ) : consultError ? (
+              <div>
+                <p className="error-message">{consultError}</p>
+                <button className="ghost-button" type="button" onClick={() => void requestAiResponse()}>
+                  AIへもう一度送る
+                </button>
+              </div>
+            ) : null}
+          </div>
           <div className="intake-complete-actions">
-            <button className="ghost-button" type="button" onClick={() => setStep(0)}>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => {
+                setAssistantMessage("");
+                setConsultError("");
+                setStep(0);
+              }}
+            >
               回答を見直す
             </button>
             <a className="intake-next-link" href="#search-conditions">
@@ -428,7 +494,13 @@ function IntakeQuestionnaire({
         <button
           className="intake-forward"
           type="button"
-          onClick={() => setStep((current) => current + 1)}
+          onClick={() => {
+            if (step === intakeQuestions.length - 1) {
+              finishQuestionnaire();
+            } else {
+              setStep((current) => current + 1);
+            }
+          }}
         >
           {step === intakeQuestions.length - 1 ? "回答を確認" : "次へ"} →
         </button>
@@ -546,6 +618,53 @@ export default function ConsultationApp() {
       priority_need: option.priorityNeed,
     }));
     setResults(null);
+  }
+
+  async function handleIntakeConsult(consultationAnswers: ConsultationAnswer[]) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      CONSULT_TIMEOUT_MS,
+    );
+
+    try {
+      const response = await fetch("/api/consult", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          consultation_answers: consultationAnswers,
+          current_conditions: {
+            municipality: conditions.municipality,
+            grade: conditions.grade,
+            household_status: conditions.household_status,
+            preferred_times: conditions.preferred_times,
+            can_pickup: conditions.can_pickup,
+            monthly_budget: conditions.monthly_budget,
+            priority_need: conditions.priority_need,
+          },
+        }),
+        signal: controller.signal,
+      });
+      const responseBody: unknown = await response.json().catch(() => null);
+      const parsedResponse = ConsultApiResponseSchema.safeParse(responseBody);
+      if (!parsedResponse.success) {
+        throw new Error("AIから確認できる形式の応答を取得できませんでした。");
+      }
+      const data = parsedResponse.data;
+      if (!data.ok) throw new Error(data.message);
+      if (Object.keys(data.conditions).length > 0) {
+        setConditions((current) => ({ ...current, ...data.conditions }));
+        setResults(null);
+      }
+      return data.assistant_message;
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new Error("AIの応答に時間がかかっています。もう一度お試しください。");
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }
 
   async function handleParse() {
@@ -692,7 +811,10 @@ export default function ConsultationApp() {
           <span className="demo-badge">登録済みURLの情報をAIで整理 · 内容は要確認</span>
         </section>
 
-        <IntakeQuestionnaire onSupportFocusChange={applySupportFocus} />
+        <IntakeQuestionnaire
+          onSupportFocusChange={applySupportFocus}
+          onConsult={handleIntakeConsult}
+        />
 
         <section
           className="workspace"

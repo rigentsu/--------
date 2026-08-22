@@ -34,13 +34,13 @@ export async function POST(request: Request) {
   if (!input.success) {
     return errorResponse(
       "INVALID_REQUEST",
-      "補足内容を入力してください（2,000文字以内）。",
+      "相談内容を確認してください（補足は2,000文字以内）。",
       400,
     );
   }
 
   try {
-    const output = await callFoundry(workerEnv, input.data.text);
+    const output = await callFoundry(workerEnv, input.data);
     const payload = ConsultApiSuccessSchema.parse({
       ok: true,
       conditions: output.conditions,

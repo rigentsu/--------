@@ -4,6 +4,7 @@ import {
   FoundryResponsesSchema,
   DuplicateGroupsOutputSchema,
   SourceExtractionOutputSchema,
+  type ConsultationRequest,
   type FoundryOutput,
   type SourceExtractionResource,
   type DuplicateGroupsOutput,
@@ -305,11 +306,15 @@ function systemPrompt() {
   return [
     CONSULTATION_SAFETY_SYSTEM_PROMPT,
     "【この機能での役割】",
-    "あなたは、保護者の補足文から検索条件だけを抽出するアシスタントです。",
-    "入力文に明示された情報だけを使い、推測や診断をしないでください。",
+    "あなたは、保護者のQ0〜Q6の回答、現在の検索条件、任意の補足文を整理し、次に考えられる選択肢を短く案内するアシスタントです。",
+    "入力に明示された情報だけを使い、推測や診断をしないでください。回答していない項目を問題として扱わないでください。",
+    "current_conditionsは支援先検索フォームの現在値であり、初期値を含む可能性があります。相談内容の要約ではconsultation_answersを優先し、回答にない家庭状況を事実として述べないでください。",
     "子どもの氏名、学校名、詳細住所などは出力に含めないでください。",
     "必ず次のJSONだけを返してください。Markdownや説明文は不要です。",
-    '{"conditions":{},"assistant_message":"補足情報を反映しました。"}',
+    '{"conditions":{},"assistant_message":"回答ありがとうございます。現在の状況を整理すると…。\n\n一緒に考えられることは…。\n\n次の一歩として…があります。"}',
+    "assistant_messageは、最初に気持ちを受け止め、次に回答内容を断定せず整理し、最後に2〜4個の現実的な選択肢または次の一歩を示してください。登校だけを目標にせず、本人と保護者の負担に配慮してください。",
+    "施設名、料金、空き状況、制度の利用可否は、この入力に確認済み検索結果が含まれないため生成しないでください。支援先は、この後にアプリの登録済み情報から検索するよう案内してください。",
+    "Q0が『お母さん』『お父さん』『保護者さん』の場合はその呼び方を使用できます。『自分で入力する』『その他』『答えたくない』の場合は『保護者の方』と呼び、入力されていない名前を作らないでください。",
     "安全情報に該当する危険が疑われる場合は、conditionsを空にし、assistant_messageで現在の安全を短く確認したうえで、信頼できる大人や適切な緊急・専門窓口への相談を促してください。入力に含まれる個人情報や危険行為の具体的内容は繰り返さないでください。",
     "分からない項目はconditionsから省略してください。利用可能な値は、学年が elementary_1〜elementary_6 または junior_high_1〜junior_high_3、世帯状況が all・free・single_parent・subsidy、時間帯が weekday_afternoon・weekday_evening・saturday_morning、送迎が yes・no・unknown、いま一番求めていることが all・stage1_anonymous・stage2_places・respite・family_peer です。金額は整数の円で返してください。",
   ].join("\n");
@@ -408,13 +413,21 @@ async function requestChatCompletion(
 
 export async function callFoundry(
   env: FoundryEnv,
-  text: string,
+  input: string | ConsultationRequest,
 ): Promise<FoundryOutput> {
+  const userContent =
+    typeof input === "string"
+      ? input
+      : JSON.stringify({
+          consultation_answers: input.consultation_answers,
+          current_conditions: input.current_conditions ?? {},
+          supplement: input.text || null,
+        });
   const content = await requestChatCompletion(
     env,
     [
       { role: "system", content: systemPrompt() },
-      { role: "user", content: text },
+      { role: "user", content: userContent },
     ],
     3_000,
   );

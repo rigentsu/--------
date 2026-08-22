@@ -23,11 +23,40 @@ export const ExtractedConditionsSchema = z
   })
   .strict();
 
-export const ConsultationRequestSchema = z
+export const ConsultationAnswerSchema = z
   .object({
-    text: z.string().trim().min(1).max(2_000),
+    question_id: z.enum([
+      "call_me",
+      "consultation_topics",
+      "school_status",
+      "duration",
+      "main_concerns",
+      "recent_state",
+      "support_focus",
+    ]),
+    question: z.string().trim().min(1).max(120),
+    answers: z.array(z.string().trim().min(1).max(120)).max(14),
   })
   .strict();
+
+export const ConsultationRequestSchema = z
+  .object({
+    text: z.string().trim().max(2_000).optional().default(""),
+    consultation_answers: z
+      .array(ConsultationAnswerSchema)
+      .max(7)
+      .optional()
+      .default([]),
+    current_conditions: ExtractedConditionsSchema.optional(),
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.text.length > 0 ||
+      value.consultation_answers.length > 0 ||
+      value.current_conditions !== undefined,
+    { message: "相談内容を入力してください。" },
+  );
 
 export const FoundryOutputSchema = z
   .object({
@@ -82,6 +111,7 @@ export const ConsultApiResponseSchema = z.discriminatedUnion("ok", [
 
 export type ExtractedConditions = z.infer<typeof ExtractedConditionsSchema>;
 export type ConsultationRequest = z.infer<typeof ConsultationRequestSchema>;
+export type ConsultationAnswer = z.infer<typeof ConsultationAnswerSchema>;
 export type FoundryOutput = z.infer<typeof FoundryOutputSchema>;
 export type ConsultApiResponse = z.infer<typeof ConsultApiResponseSchema>;
 

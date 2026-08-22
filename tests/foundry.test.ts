@@ -88,7 +88,25 @@ test("Project endpointにはResponses API形式でinstructionsとinputを送る"
         MS_FOUNDRY_DEPLOYMENT_NAME: "gpt-5-mini",
         MS_FOUNDRY_API_KEY: "test-only-key",
       },
-      "子どもの居場所を探したい",
+      {
+        text: "",
+        consultation_answers: [
+          {
+            question_id: "school_status",
+            question: "現在の学校との状況",
+            answers: ["休む日が増えている"],
+          },
+          {
+            question_id: "support_focus",
+            question: "どんなサポートがあると助かりますか？",
+            answers: ["子どもへの声かけを考えたい"],
+          },
+        ],
+        current_conditions: {
+          municipality: "葛飾区",
+          priority_need: "stage1_anonymous",
+        },
+      },
     );
 
     assert.equal(
@@ -97,7 +115,18 @@ test("Project endpointにはResponses API形式でinstructionsとinputを送る"
     );
     const capturedBody = requestBody as unknown as Record<string, unknown>;
     assert.equal(capturedBody.model, "gpt-5-mini");
-    assert.equal(capturedBody.input, "子どもの居場所を探したい");
+    const sentInput = JSON.parse(String(capturedBody.input)) as {
+      consultation_answers: Array<{ question_id: string; answers: string[] }>;
+      current_conditions: { municipality: string; priority_need: string };
+      supplement: string | null;
+    };
+    assert.equal(sentInput.consultation_answers.length, 2);
+    assert.equal(sentInput.consultation_answers[0]?.question_id, "school_status");
+    assert.deepEqual(sentInput.consultation_answers[1]?.answers, [
+      "子どもへの声かけを考えたい",
+    ]);
+    assert.equal(sentInput.current_conditions.municipality, "葛飾区");
+    assert.equal(sentInput.supplement, null);
     assert.equal(typeof capturedBody.instructions, "string");
     const instructions = String(capturedBody.instructions);
     assert.match(
@@ -106,6 +135,8 @@ test("Project endpointにはResponses API形式でinstructionsとinputを送る"
     );
     assert.match(instructions, /自殺・自傷/);
     assert.match(instructions, /登校を一方的に促さない/);
+    assert.match(instructions, /Q0〜Q6の回答/);
+    assert.match(instructions, /2〜4個の現実的な選択肢/);
     assert.match(instructions, /conditionsを空にし/);
     assert.ok(
       instructions.indexOf("【基本原則】") <
